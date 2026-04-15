@@ -112,8 +112,8 @@ export default function AddScreen() {
   const analyzeLabel = async (uri: string) => {
     setLoading(true);
     try {
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      const token = await AsyncStorage.getItem('@cave_token');
+      const SecureStore = await import('expo-secure-store');
+      const token = await SecureStore.getItemAsync('cave_token');
 
       const formData = new FormData();
       formData.append('image', { uri, name: 'label.jpg', type: 'image/jpeg' } as any);

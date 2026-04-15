@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { API_URL } from '../constants';
 
 const client = axios.create({
@@ -11,7 +11,7 @@ const client = axios.create({
 // Injecte le token JWT sur chaque requête
 client.interceptors.request.use(async (config) => {
   try {
-    const token = await AsyncStorage.getItem('@cave_token');
+    const token = await SecureStore.getItemAsync('cave_token');
     if (token) config.headers['Authorization'] = `Bearer ${token}`;
   } catch { /* ignore */ }
   return config;
