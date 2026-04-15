@@ -76,7 +76,7 @@ export function ServerWakeup({ onReady }: Props) {
   }[phase];
 
   const sub = phase === 'waking'
-    ? `Votre cave sécurisée démarre. Cela peut prendre jusqu'à 30 secondes.`
+    ? `Votre cave démarre. Cela peut prendre jusqu'à 30 secondes.`
     : phase === 'timeout'
       ? 'Vérifiez votre connexion ou réessayez dans quelques instants.'
       : '';
