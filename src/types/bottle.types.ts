@@ -64,6 +64,41 @@ export interface ConsumptionEntry {
   occasion?: string;
 }
 
+export interface TasteProfileEntry {
+  name: string;
+  avgNote: number;
+  count: number;
+}
+
+export interface RecentDrink {
+  date: string;
+  note: number;
+  comment?: string;
+  occasion?: string;
+  bottle: Pick<Bottle, '_id' | 'nom' | 'producteur' | 'couleur' | 'annee'> | null;
+}
+
+export interface TasteProfile {
+  totalRated: number;
+  avgRating: number | null;
+  topCouleurs:  TasteProfileEntry[];
+  topRegions:   TasteProfileEntry[];
+  topCepages:   TasteProfileEntry[];
+  topOccasions: { name: string; count: number }[];
+  recentDrinks: RecentDrink[];
+}
+
+export interface SmartReco {
+  bottle: Bottle;
+  score: number;
+  reasons: string[];
+}
+
+export interface SmartRecommendations {
+  recommendations: SmartReco[];
+  hasProfile: boolean;
+}
+
 export interface CaveStats {
   totalBottles: number;
   totalValue: number;

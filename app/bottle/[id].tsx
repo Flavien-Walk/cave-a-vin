@@ -16,6 +16,8 @@ import { Input } from '../../src/components/ui/Input';
 import { getWineGradient, getAverageNote, formatPrice, isNearUrgent } from '../../src/utils/bottle.utils';
 import type { Bottle, ConsumptionEntry } from '../../src/types';
 
+const OCCASIONS = ['Repas du soir', 'Repas en famille', 'Repas romantique', 'Apéritif', 'Fête', 'Dégustation', 'Cadeau reçu', 'Autre'];
+
 export default function BottleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { bottles, toggleFavorite, drinkBottle, addNote, deleteNote, deleteBottle } = useBottleStore();
@@ -29,10 +31,11 @@ export default function BottleDetailScreen() {
   const [showNote,  setShowNote]  = useState(false);
 
   // Drink modal state
-  const [drinkQty,     setDrinkQty]     = useState('1');
-  const [drinkNote,    setDrinkNote]    = useState(0);
-  const [drinkComment, setDrinkComment] = useState('');
-  const [drinkLoading, setDrinkLoading] = useState(false);
+  const [drinkQty,      setDrinkQty]      = useState('1');
+  const [drinkNote,     setDrinkNote]     = useState(0);
+  const [drinkComment,  setDrinkComment]  = useState('');
+  const [drinkOccasion, setDrinkOccasion] = useState('');
+  const [drinkLoading,  setDrinkLoading]  = useState(false);
 
   // Note modal state
   const [noteValue,    setNoteValue]   = useState(0);
@@ -81,10 +84,15 @@ export default function BottleDetailScreen() {
     if (!qty || qty < 1) { Alert.alert('Quantité invalide'); return; }
     setDrinkLoading(true);
     try {
-      await drinkBottle(bottle._id, { quantity: qty, note: drinkNote || undefined, comment: drinkComment || undefined });
+      await drinkBottle(bottle._id, {
+        quantity: qty,
+        note:     drinkNote || undefined,
+        comment:  drinkComment || undefined,
+        occasion: drinkOccasion || undefined,
+      });
       setBottle(b => b ? { ...b, quantite: b.quantite - qty } : b);
       setShowDrink(false);
-      setDrinkQty('1'); setDrinkNote(0); setDrinkComment('');
+      setDrinkQty('1'); setDrinkNote(0); setDrinkComment(''); setDrinkOccasion('');
       await loadFull();
     } catch (err: any) {
       Alert.alert('Erreur', err.message);
@@ -235,12 +243,18 @@ export default function BottleDetailScreen() {
 
         {/* ── Historique consommation ── */}
         {history.length > 0 && (
-          <InfoCard title={`Historique (${history.length} entrées)`} icon="time-outline">
+          <InfoCard title={`Historique (${history.length} dégustation${history.length > 1 ? 's' : ''})`} icon="time-outline">
             {history.map(h => (
               <View key={h._id} style={styles.historyRow}>
-                <Text style={styles.historyDate}>{new Date(h.date).toLocaleDateString('fr-FR')}</Text>
-                <Text style={styles.historyQty}>−{h.quantity}</Text>
-                {h.comment ? <Text style={styles.historyComment}>{h.comment}</Text> : null}
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                    <Text style={styles.historyDate}>{new Date(h.date).toLocaleDateString('fr-FR')}</Text>
+                    <Text style={styles.historyQty}>−{h.quantity}</Text>
+                    {h.occasion ? <Text style={styles.historyOccasion}>{h.occasion}</Text> : null}
+                  </View>
+                  {h.comment ? <Text style={styles.historyComment}>{h.comment}</Text> : null}
+                </View>
+                {h.note ? <StarRating value={h.note} readonly size={12} /> : null}
               </View>
             ))}
           </InfoCard>
@@ -270,17 +284,57 @@ export default function BottleDetailScreen() {
       {/* ── Modal Consommer ── */}
       <Modal visible={showDrink} transparent animationType="slide">
         <View style={styles.overlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Consommer une bouteille</Text>
-            <Input label="Nombre de bouteilles" value={drinkQty} onChangeText={setDrinkQty} keyboardType="numeric" />
-            <Text style={styles.modalLabel}>Votre appréciation</Text>
-            <StarRating value={drinkNote} onChange={setDrinkNote} size={32} />
-            <Input label="Commentaire (optionnel)" placeholder="ex : Parfait avec un agneau, un peu fermé…" value={drinkComment} onChangeText={setDrinkComment} multiline numberOfLines={2} style={{ marginTop: Spacing.md }} />
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: Spacing.lg }}>
-              <Button label="Annuler" variant="secondary" onPress={() => setShowDrink(false)} style={{ flex: 1 }} />
-              <Button label="Valider" onPress={handleDrink} loading={drinkLoading} style={{ flex: 2 }} />
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }} keyboardShouldPersistTaps="handled">
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Dégustation</Text>
+              <Text style={styles.modalSub}>{bottle.nom}</Text>
+
+              {/* Nombre de bouteilles */}
+              <Input label="Nombre de bouteilles" value={drinkQty} onChangeText={setDrinkQty} keyboardType="numeric" />
+
+              {/* Note étoiles */}
+              <Text style={[styles.modalLabel, { marginTop: Spacing.md }]}>Votre note</Text>
+              <View style={styles.starRow}>
+                <StarRating value={drinkNote} onChange={setDrinkNote} size={36} />
+                {drinkNote > 0 && (
+                  <Text style={styles.ratingLabel}>
+                    {['', 'Décevant', 'Passable', 'Bien', 'Très bien', 'Exceptionnel'][drinkNote]}
+                  </Text>
+                )}
+              </View>
+
+              {/* Occasion — chips */}
+              <Text style={[styles.modalLabel, { marginTop: Spacing.md }]}>Occasion</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
+                <View style={{ flexDirection: 'row', gap: 8, paddingRight: 16 }}>
+                  {OCCASIONS.map(o => (
+                    <TouchableOpacity
+                      key={o}
+                      style={[styles.occChip, drinkOccasion === o && styles.occChipActive]}
+                      onPress={() => setDrinkOccasion(v => v === o ? '' : o)}
+                    >
+                      <Text style={[styles.occChipText, drinkOccasion === o && styles.occChipTextActive]}>{o}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+
+              {/* Commentaire */}
+              <Input
+                label="Commentaire (optionnel)"
+                placeholder="Arômes, texture, accord mets-vins…"
+                value={drinkComment}
+                onChangeText={setDrinkComment}
+                multiline
+                numberOfLines={3}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: Spacing.lg }}>
+                <Button label="Annuler" variant="secondary" onPress={() => setShowDrink(false)} style={{ flex: 1 }} />
+                <Button label="Enregistrer" onPress={handleDrink} loading={drinkLoading} style={{ flex: 2 }} />
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -360,15 +414,25 @@ const styles = StyleSheet.create({
   noteTexte:  { ...Typography.bodySmall, color: Colors.brunMoka, marginTop: 4, lineHeight: 18 },
   noteDate:   { ...Typography.caption, color: Colors.brunClair, marginTop: 2 },
 
-  historyRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: Colors.parchemin },
-  historyDate:    { ...Typography.caption, color: Colors.brunClair, width: 80 },
-  historyQty:     { ...Typography.bodySmall, color: Colors.rougeAlerte, fontWeight: '700', width: 28 },
-  historyComment: { ...Typography.caption, color: Colors.brunMoyen, flex: 1, fontStyle: 'italic' },
+  historyRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: Colors.parchemin },
+  historyDate:    { ...Typography.caption, color: Colors.brunClair },
+  historyQty:     { ...Typography.bodySmall, color: Colors.rougeAlerte, fontWeight: '700' },
+  historyOccasion:{ ...Typography.caption, color: Colors.ambreChaud, fontStyle: 'italic' },
+  historyComment: { ...Typography.caption, color: Colors.brunMoyen, marginTop: 2, fontStyle: 'italic' },
 
   stickyBar: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, paddingBottom: Spacing.xl, backgroundColor: Colors.cremeIvoire, borderTopWidth: 1, borderTopColor: Colors.champagne },
 
-  overlay:    { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  overlay:    { flex: 1, backgroundColor: Colors.overlay },
   modalCard:  { backgroundColor: Colors.cremeIvoire, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.xl, paddingBottom: 40 },
-  modalTitle: { ...Typography.h3, textAlign: 'center', marginBottom: Spacing.xl },
+  modalTitle: { ...Typography.h3, textAlign: 'center', marginBottom: 4 },
+  modalSub:   { ...Typography.bodySmall, color: Colors.brunMoyen, textAlign: 'center', marginBottom: Spacing.xl, fontStyle: 'italic' },
   modalLabel: { ...Typography.bodySmall, fontWeight: '600', color: Colors.brunMoyen, marginBottom: Spacing.sm },
+
+  starRow:     { alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+  ratingLabel: { fontSize: 13, fontWeight: '700', color: Colors.ambreChaud },
+
+  occChip:         { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
+  occChipActive:   { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
+  occChipText:     { fontSize: 13, fontWeight: '600', color: Colors.brunMoyen },
+  occChipTextActive:{ color: Colors.white },
 });

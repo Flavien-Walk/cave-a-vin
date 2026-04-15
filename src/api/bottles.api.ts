@@ -1,5 +1,5 @@
 import client from './client';
-import type { Bottle, CreateBottleDto, UpdateBottleDto, ConsumptionEntry } from '../types';
+import type { Bottle, CreateBottleDto, UpdateBottleDto, ConsumptionEntry, TasteProfile, SmartRecommendations } from '../types';
 
 export const bottlesApi = {
   getAll: () =>
@@ -34,6 +34,12 @@ export const bottlesApi = {
 
   recommend: () =>
     client.get<Bottle[]>('/api/bottles/recommend').then(r => r.data),
+
+  getTasteProfile: () =>
+    client.get<TasteProfile>('/api/bottles/taste-profile').then(r => r.data),
+
+  getSmartRecommendations: () =>
+    client.get<SmartRecommendations>('/api/bottles/smart-recommendations').then(r => r.data),
 
   suggestWine: (plat: string) =>
     client.post<{ plat: string; suggestions: string[]; bottles: Bottle[] }>('/api/bottles/suggest-wine', { plat }).then(r => r.data),

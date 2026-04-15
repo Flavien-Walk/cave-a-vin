@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Alert, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -8,13 +8,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
 import { useWishlistStore, useBottleStore } from '../../src/stores';
 import { bottlesApi } from '../../src/api';
-import { Input, Button, WineBadge } from '../../src/components/ui';
+import { Input, Button, WineBadge, StarRating } from '../../src/components/ui';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { getRecommendations, analyzeFood } from '../../src/utils/recommendation';
-import type { WishlistItem, WishlistPriorite, Bottle } from '../../src/types';
+import { getWineColorHex } from '../../src/utils/bottle.utils';
+import { router } from 'expo-router';
+import type { WishlistItem, WishlistPriorite, Bottle, TasteProfile, SmartReco } from '../../src/types';
 import type { WineRecommendation } from '../../src/utils/recommendation';
 
-const TABS = ['Accords & plats', 'À boire bientôt', 'Wishlist'] as const;
+const TABS = ['Accords & plats', 'Mes Goûts', 'À boire bientôt', 'Wishlist'] as const;
 type Tab = typeof TABS[number];
 
 const SUGGESTIONS_RAPIDES = [
@@ -32,6 +34,11 @@ export default function DiscoverScreen() {
   const [recs, setRecs] = useState<WineRecommendation[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Mes Goûts
+  const [tasteProfile,   setTasteProfile]   = useState<TasteProfile | null>(null);
+  const [smartRecos,     setSmartRecos]     = useState<SmartReco[]>([]);
+  const [tasteLoading,   setTasteLoading]   = useState(false);
+
   // Urgents
   const [urgents, setUrgents]     = useState<Bottle[]>([]);
   const [urgLoading, setUrgLoading] = useState(false);
@@ -47,7 +54,24 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     if (activeTab === 'À boire bientôt') loadUrgents();
+    if (activeTab === 'Mes Goûts') loadTasteData();
   }, [activeTab]);
+
+  const loadTasteData = useCallback(async () => {
+    setTasteLoading(true);
+    try {
+      const [profile, recos] = await Promise.all([
+        bottlesApi.getTasteProfile(),
+        bottlesApi.getSmartRecommendations(),
+      ]);
+      setTasteProfile(profile);
+      setSmartRecos(recos.recommendations);
+    } catch (e: any) {
+      Alert.alert('Erreur', e.message);
+    } finally {
+      setTasteLoading(false);
+    }
+  }, []);
 
   const loadUrgents = async () => {
     setUrgLoading(true);
@@ -163,6 +187,139 @@ export default function DiscoverScreen() {
             )}
           </ScrollView>
         </KeyboardAvoidingView>
+      )}
+
+      {/* ── Mes Goûts ── */}
+      {activeTab === 'Mes Goûts' && (
+        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+          {tasteLoading ? (
+            <ActivityIndicator color={Colors.lieDeVin} style={{ marginTop: Spacing.xxxl }} />
+          ) : !tasteProfile || tasteProfile.totalRated === 0 ? (
+            <View style={taste.empty}>
+              <View style={taste.emptyIcon}>
+                <Ionicons name="heart-outline" size={34} color={Colors.parchemin} />
+              </View>
+              <Text style={taste.emptyTitle}>Aucune dégustation notée</Text>
+              <Text style={taste.emptyText}>
+                Consommez des bouteilles et notez-les pour que l'app apprenne vos préférences et vous fasse des recommandations personnalisées.
+              </Text>
+            </View>
+          ) : (
+            <>
+              {/* KPI global */}
+              <View style={taste.kpiRow}>
+                <View style={taste.kpiCard}>
+                  <Text style={taste.kpiValue}>{tasteProfile.totalRated}</Text>
+                  <Text style={taste.kpiLabel}>dégustations notées</Text>
+                </View>
+                <View style={taste.kpiCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="star" size={18} color={Colors.ambreChaud} />
+                    <Text style={[taste.kpiValue, { color: Colors.ambreChaud }]}>{tasteProfile.avgRating?.toFixed(1)}</Text>
+                  </View>
+                  <Text style={taste.kpiLabel}>note moyenne</Text>
+                </View>
+              </View>
+
+              {/* Couleurs préférées */}
+              {tasteProfile.topCouleurs.length > 0 && (
+                <View style={taste.section}>
+                  <View style={taste.sectionHeader}>
+                    <View style={[taste.sectionAccent, { backgroundColor: Colors.lieDeVin }]} />
+                    <Text style={[taste.sectionTitle, { color: Colors.lieDeVin }]}>Couleurs préférées</Text>
+                  </View>
+                  {tasteProfile.topCouleurs.map(c => (
+                    <TasteRow
+                      key={c.name}
+                      label={c.name}
+                      avgNote={c.avgNote}
+                      count={c.count}
+                      dotColor={getWineColorHex(c.name)}
+                      maxNote={5}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Régions préférées */}
+              {tasteProfile.topRegions.length > 0 && (
+                <View style={taste.section}>
+                  <View style={taste.sectionHeader}>
+                    <View style={[taste.sectionAccent, { backgroundColor: Colors.ambreChaud }]} />
+                    <Text style={[taste.sectionTitle, { color: Colors.ambreChaud }]}>Régions appréciées</Text>
+                  </View>
+                  {tasteProfile.topRegions.slice(0, 5).map(r => (
+                    <TasteRow
+                      key={r.name}
+                      label={r.name}
+                      avgNote={r.avgNote}
+                      count={r.count}
+                      dotColor={Colors.ambreChaud}
+                      maxNote={5}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Cépages */}
+              {tasteProfile.topCepages.length > 0 && (
+                <View style={taste.section}>
+                  <View style={taste.sectionHeader}>
+                    <View style={[taste.sectionAccent, { backgroundColor: Colors.vertSauge }]} />
+                    <Text style={[taste.sectionTitle, { color: Colors.vertSauge }]}>Cépages favoris</Text>
+                  </View>
+                  {tasteProfile.topCepages.map(c => (
+                    <TasteRow
+                      key={c.name}
+                      label={c.name}
+                      avgNote={c.avgNote}
+                      count={c.count}
+                      dotColor={Colors.vertSauge}
+                      maxNote={5}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Recommandations intelligentes */}
+              {smartRecos.length > 0 && (
+                <View style={taste.section}>
+                  <View style={taste.sectionHeader}>
+                    <View style={[taste.sectionAccent, { backgroundColor: Colors.rosePale }]} />
+                    <Text style={[taste.sectionTitle, { color: Colors.rosePale }]}>Pour vous ce soir</Text>
+                  </View>
+                  <Text style={taste.sectionSub}>Sélection basée sur vos préférences</Text>
+                  {smartRecos.map(r => (
+                    <SmartRecoCard key={r.bottle._id} reco={r} />
+                  ))}
+                </View>
+              )}
+
+              {/* Dégustations récentes */}
+              {tasteProfile.recentDrinks.length > 0 && (
+                <View style={taste.section}>
+                  <View style={taste.sectionHeader}>
+                    <View style={[taste.sectionAccent, { backgroundColor: Colors.brunMoyen }]} />
+                    <Text style={[taste.sectionTitle, { color: Colors.brunMoyen }]}>Dernières dégustations</Text>
+                  </View>
+                  {tasteProfile.recentDrinks.map((d, i) => (
+                    <View key={i} style={taste.drinkRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={taste.drinkName} numberOfLines={1}>
+                          {d.bottle?.nom ?? 'Bouteille inconnue'}
+                        </Text>
+                        {d.occasion && <Text style={taste.drinkOccasion}>{d.occasion}</Text>}
+                        {d.comment  && <Text style={taste.drinkComment} numberOfLines={2}>{d.comment}</Text>}
+                        <Text style={taste.drinkDate}>{new Date(d.date).toLocaleDateString('fr-FR')}</Text>
+                      </View>
+                      <StarRating value={d.note} readonly size={14} />
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+        </ScrollView>
       )}
 
       {/* ── À boire bientôt ── */}
@@ -393,4 +550,101 @@ const wc = StyleSheet.create({
   nom:         { fontSize: 15, fontWeight: '700', color: Colors.brunMoka },
   strikethrough:{ textDecorationLine: 'line-through' },
   note:        { fontSize: 12, color: Colors.brunClair, fontStyle: 'italic', marginTop: 2 },
+});
+
+// ── TasteRow ──
+function TasteRow({ label, avgNote, count, dotColor, maxNote }: {
+  label: string; avgNote: number; count: number; dotColor: string; maxNote: number;
+}) {
+  const pct = Math.round((avgNote / maxNote) * 100);
+  return (
+    <View style={tr.row}>
+      <View style={[tr.dot, { backgroundColor: dotColor }]} />
+      <Text style={tr.label} numberOfLines={1}>{label}</Text>
+      <View style={tr.track}>
+        <View style={[tr.fill, { width: (pct + '%') as any, backgroundColor: dotColor + 'CC' }]} />
+      </View>
+      <View style={tr.right}>
+        <Ionicons name="star" size={10} color={Colors.ambreChaud} />
+        <Text style={tr.note}>{avgNote.toFixed(1)}</Text>
+        <Text style={tr.count}>({count})</Text>
+      </View>
+    </View>
+  );
+}
+const tr = StyleSheet.create({
+  row:   { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: Spacing.sm },
+  dot:   { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  label: { fontSize: 12, width: 100, color: Colors.brunMoyen, flexShrink: 0 },
+  track: { flex: 1, height: 7, backgroundColor: Colors.parchemin, borderRadius: Radius.full, overflow: 'hidden' },
+  fill:  { height: '100%', borderRadius: Radius.full },
+  right: { flexDirection: 'row', alignItems: 'center', gap: 2, width: 60, justifyContent: 'flex-end' },
+  note:  { fontSize: 12, fontWeight: '700', color: Colors.brunMoka },
+  count: { fontSize: 10, color: Colors.brunClair },
+});
+
+// ── SmartRecoCard ──
+function SmartRecoCard({ reco }: { reco: SmartReco }) {
+  return (
+    <TouchableOpacity style={sr.card} onPress={() => router.push(`/bottle/${reco.bottle._id}` as any)} activeOpacity={0.82}>
+      <View style={{ flex: 1 }}>
+        <Text style={sr.nom} numberOfLines={1}>{reco.bottle.nom}</Text>
+        {reco.bottle.producteur && <Text style={sr.sub}>{reco.bottle.producteur}</Text>}
+        <View style={sr.meta}>
+          {reco.bottle.couleur && <WineBadge couleur={reco.bottle.couleur} size="sm" />}
+          {reco.bottle.annee && <Text style={sr.year}>{reco.bottle.annee}</Text>}
+          <Text style={sr.cave}>{reco.bottle.cave}</Text>
+        </View>
+        <View style={sr.reasons}>
+          {reco.reasons.slice(0, 2).map((r, i) => (
+            <View key={i} style={sr.reasonPill}>
+              <Text style={sr.reasonText}>{r}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={sr.scoreBox}>
+        <Ionicons name="heart" size={14} color={Colors.lieDeVin} />
+        <Text style={sr.score}>{reco.score}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+const sr = StyleSheet.create({
+  card:      { backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.sm, flexDirection: 'row', borderWidth: 1, borderColor: Colors.parchemin, ...Shadow.sm },
+  nom:       { fontSize: 15, fontWeight: '700', color: Colors.brunMoka, marginBottom: 2 },
+  sub:       { fontSize: 12, color: Colors.brunMoyen, marginBottom: 4 },
+  meta:      { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 6 },
+  year:      { fontSize: 11, color: Colors.brunClair },
+  cave:      { fontSize: 11, color: Colors.brunClair, fontStyle: 'italic' },
+  reasons:   { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  reasonPill:{ backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3 },
+  reasonText:{ fontSize: 11, color: Colors.lieDeVin, fontWeight: '600' },
+  scoreBox:  { alignItems: 'center', justifyContent: 'center', paddingLeft: Spacing.sm, gap: 2 },
+  score:     { fontSize: 18, fontWeight: '800', color: Colors.lieDeVin },
+});
+
+// ── Styles taste ──
+const taste = StyleSheet.create({
+  empty:     { alignItems: 'center', paddingTop: Spacing.xxxl * 2, gap: Spacing.md },
+  emptyIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle:{ fontSize: 18, fontWeight: '700', color: Colors.brunMoyen },
+  emptyText: { ...Typography.body, color: Colors.brunClair, textAlign: 'center', lineHeight: 22 },
+
+  kpiRow:  { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
+  kpiCard: { flex: 1, backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: Colors.parchemin, ...Shadow.sm },
+  kpiValue:{ fontSize: 26, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: -0.5 },
+  kpiLabel:{ fontSize: 11, color: Colors.brunMoyen, textAlign: 'center' },
+
+  section:      { backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin, ...Shadow.sm },
+  sectionHeader:{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: 4 },
+  sectionAccent:{ width: 3, height: 14, borderRadius: 2 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.3, marginBottom: 0 },
+  sectionSub:   { fontSize: 12, color: Colors.brunClair, marginBottom: Spacing.md, fontStyle: 'italic' },
+
+  drinkRow:     { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Spacing.sm, borderBottomWidth: 0.5, borderBottomColor: Colors.parchemin, gap: Spacing.md },
+  drinkName:    { fontSize: 14, fontWeight: '700', color: Colors.brunMoka },
+  drinkOccasion:{ fontSize: 12, color: Colors.ambreChaud, fontStyle: 'italic', marginTop: 1 },
+  drinkComment: { fontSize: 12, color: Colors.brunMoyen, marginTop: 2, lineHeight: 17 },
+  drinkDate:    { fontSize: 11, color: Colors.brunClair, marginTop: 3 },
 });
