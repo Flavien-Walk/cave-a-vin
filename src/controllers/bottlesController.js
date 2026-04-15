@@ -154,15 +154,116 @@ exports.scanLabel = async (req, res, next) => {
       return res.status(400).json({ message: 'Aucune image reçue.' });
     }
 
-    const apiKey = process.env.OCR_SPACE_KEY || 'helloworld'; // clé gratuite de démo
-    const base64Image = 'data:image/jpeg;base64,' + req.file.buffer.toString('base64');
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+
+    // ── Voie principale : Claude Vision ─────────────────────────────────────
+    if (anthropicKey) {
+      const base64Image = req.file.buffer.toString('base64');
+
+      const prompt = `Tu es un expert en vins. Analyse cette photo d'étiquette de bouteille de vin.
+
+Règles STRICTES :
+1. Extrait UNIQUEMENT ce qui est clairement lisible sur l'étiquette
+2. Ne devine pas, n'invente pas, ne complète pas
+3. Pour l'année : doit être entre 1950 et ${new Date().getFullYear()} — ignore tout autre chiffre (code-barres, lot, etc.)
+4. Pour la couleur : déduis du texte visible ("rouge", "blanc", "rosé", "Cuvée rouge", etc.) — null si impossible à déterminer
+5. Le "nom" est le nom de la cuvée ou du château tel qu'affiché en gros sur l'étiquette
+6. Le "producteur" est le domaine/château/négociant qui produit le vin
+
+Champs de couleur acceptés : "rouge", "blanc", "rosé", "effervescent", "moelleux", "autre"
+
+Réponds UNIQUEMENT avec ce JSON, sans markdown, sans explication :
+{
+  "nom": "...",
+  "producteur": "...",
+  "annee": null,
+  "couleur": null,
+  "region": null,
+  "appellation": null,
+  "cepage": null,
+  "confidence": 0,
+  "detected": [],
+  "message": "..."
+}
+
+Pour confidence : 0-100, basé sur la lisibilité réelle de l'étiquette et le nombre de champs trouvés.
+Pour message : une phrase courte décrivant le résultat (ex: "Étiquette bien reconnue", "Photo floue — peu d'informations lisibles").`;
+
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key':         anthropicKey,
+          'anthropic-version': '2023-06-01',
+          'content-type':      'application/json',
+        },
+        body: JSON.stringify({
+          model:      'claude-haiku-4-5-20251001',
+          max_tokens: 512,
+          messages: [{
+            role:    'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: req.file.mimetype || 'image/jpeg', data: base64Image } },
+              { type: 'text',  text: prompt },
+            ],
+          }],
+        }),
+      });
+
+      if (!claudeRes.ok) {
+        const errData = await claudeRes.json().catch(() => ({}));
+        console.error('[scan] Claude API error:', claudeRes.status, errData);
+        // Fallback OCR si Claude échoue
+      } else {
+        const claudeData = await claudeRes.json();
+        const raw = claudeData.content?.[0]?.text ?? '';
+
+        try {
+          // Extraire le JSON de la réponse (Claude peut parfois ajouter du texte)
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error('Pas de JSON dans la réponse');
+          const result = JSON.parse(jsonMatch[0]);
+
+          // Normaliser les champs
+          const COULEURS_VALIDES = ['rouge', 'blanc', 'rosé', 'effervescent', 'moelleux', 'autre'];
+          if (result.couleur && !COULEURS_VALIDES.includes(result.couleur)) result.couleur = null;
+          if (result.annee && (result.annee < 1950 || result.annee > new Date().getFullYear())) result.annee = null;
+
+          // S'assurer que detected et message sont présents
+          if (!Array.isArray(result.detected)) {
+            result.detected = [
+              result.nom         && 'nom',
+              result.annee       && 'millésime',
+              result.couleur     && 'couleur',
+              (result.region || result.appellation) && 'région',
+              result.producteur  && 'producteur',
+            ].filter(Boolean);
+          }
+          if (!result.message) {
+            result.message = result.confidence >= 70
+              ? 'Étiquette bien reconnue — vérifiez les informations.'
+              : result.confidence >= 35
+                ? `Reconnaissance partielle — ${result.detected.join(', ')} détecté(s).`
+                : 'Texte insuffisant — complétez manuellement.';
+          }
+          result.partial = result.confidence < 100 && result.confidence > 0;
+
+          return res.json(result);
+        } catch (parseErr) {
+          console.error('[scan] JSON parse error:', parseErr.message, '\nRaw:', raw);
+          // Fallback OCR
+        }
+      }
+    }
+
+    // ── Fallback : OCR.Space + regex ─────────────────────────────────────────
+    const ocrKey = process.env.OCR_SPACE_KEY || 'helloworld';
+    const base64Fallback = 'data:image/jpeg;base64,' + req.file.buffer.toString('base64');
 
     const formData = new URLSearchParams();
-    formData.append('apikey', apiKey);
-    formData.append('base64Image', base64Image);
+    formData.append('apikey', ocrKey);
+    formData.append('base64Image', base64Fallback);
     formData.append('language', 'fre');
     formData.append('OCREngine', '2');
-    formData.append('isTable', 'false');
     formData.append('scale', 'true');
     formData.append('detectOrientation', 'true');
 
@@ -172,26 +273,14 @@ exports.scanLabel = async (req, res, next) => {
       body: formData.toString(),
     });
 
-    if (!ocrRes.ok) {
-      throw new Error(`OCR.Space HTTP ${ocrRes.status}`);
-    }
+    if (!ocrRes.ok) return res.json(extractFromText(''));
 
     const ocrData = await ocrRes.json();
+    if (ocrData.IsErroredOnProcessing) return res.json(extractFromText(''));
 
-    // OCR.Space retourne IsErroredOnProcessing: true en cas d'erreur
-    if (ocrData.IsErroredOnProcessing) {
-      const msg = ocrData.ErrorMessage?.[0] ?? 'Échec OCR';
-      console.error('OCR.Space error:', msg);
-      // Retourner un résultat vide plutôt qu'une erreur 500
-      return res.json(extractFromText(''));
-    }
+    const text = (ocrData.ParsedResults ?? []).map(r => r.ParsedText ?? '').join('\n');
+    res.json(extractFromText(text));
 
-    const text = (ocrData.ParsedResults ?? [])
-      .map(r => r.ParsedText ?? '')
-      .join('\n');
-
-    const result = extractFromText(text);
-    res.json(result);
   } catch (err) { next(err); }
 };
 
