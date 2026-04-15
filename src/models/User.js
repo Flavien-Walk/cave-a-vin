@@ -5,6 +5,8 @@ const UserSchema = new mongoose.Schema({
   name:         { type: String, required: true, trim: true, maxlength: 100 },
   email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
   passwordHash: { type: String, required: true },
+  resetCode:       { type: String,  select: false },
+  resetCodeExpiry: { type: Date,    select: false },
 }, { timestamps: true });
 
 // Hash avant sauvegarde
