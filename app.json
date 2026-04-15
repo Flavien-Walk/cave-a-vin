@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Cave à Vin",
+    "slug": "cave-a-vin",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "caveavin",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lef69.caveavin"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0F0810"
+      },
+      "package": "com.lef69.caveavin"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-system-ui",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Accès à la caméra pour scanner les codes-barres des bouteilles."
+        }
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4af28938-6c6c-4a6b-b661-3ea9d944bf29"
+      }
+    },
+    "owner": "flavien_leo"
+  }
+}
