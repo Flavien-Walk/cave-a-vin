@@ -1,13 +1,20 @@
-const router = require('express').Router();
-const c = require('../controllers/bottlesController');
+const router  = require('express').Router();
+const multer  = require('multer');
+const c       = require('../controllers/bottlesController');
 const { authMiddleware } = require('../middleware/auth');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 8 * 1024 * 1024 }, // 8 MB max
+});
 
 // Toutes les routes bouteilles nécessitent l'auth
 router.use(authMiddleware);
 
 router.get('/recommend',     c.recommend);
 router.post('/suggest-wine', c.suggestWine);
-router.post('/scan-label',   c.scanLabel);
+// scan-label reçoit un fichier multipart
+router.post('/scan-label',   upload.single('image'), c.scanLabel);
 
 router.get('/',    c.getAll);
 router.post('/',   c.create);

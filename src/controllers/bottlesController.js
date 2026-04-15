@@ -150,9 +150,46 @@ exports.suggestWine = async (req, res, next) => {
 // ── POST /bottles/scan-label ─────────────────────────────────────────────────
 exports.scanLabel = async (req, res, next) => {
   try {
-    // Simple regex-based extraction from any text field if Google Vision is not configured
-    // Returns partial data with confidence score
-    const text = req.body.text || '';
+    if (!req.file) {
+      return res.status(400).json({ message: 'Aucune image reçue.' });
+    }
+
+    const apiKey = process.env.OCR_SPACE_KEY || 'helloworld'; // clé gratuite de démo
+    const base64Image = 'data:image/jpeg;base64,' + req.file.buffer.toString('base64');
+
+    const formData = new URLSearchParams();
+    formData.append('apikey', apiKey);
+    formData.append('base64Image', base64Image);
+    formData.append('language', 'fre');
+    formData.append('OCREngine', '2');
+    formData.append('isTable', 'false');
+    formData.append('scale', 'true');
+    formData.append('detectOrientation', 'true');
+
+    const ocrRes = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    });
+
+    if (!ocrRes.ok) {
+      throw new Error(`OCR.Space HTTP ${ocrRes.status}`);
+    }
+
+    const ocrData = await ocrRes.json();
+
+    // OCR.Space retourne IsErroredOnProcessing: true en cas d'erreur
+    if (ocrData.IsErroredOnProcessing) {
+      const msg = ocrData.ErrorMessage?.[0] ?? 'Échec OCR';
+      console.error('OCR.Space error:', msg);
+      // Retourner un résultat vide plutôt qu'une erreur 500
+      return res.json(extractFromText(''));
+    }
+
+    const text = (ocrData.ParsedResults ?? [])
+      .map(r => r.ParsedText ?? '')
+      .join('\n');
+
     const result = extractFromText(text);
     res.json(result);
   } catch (err) { next(err); }
