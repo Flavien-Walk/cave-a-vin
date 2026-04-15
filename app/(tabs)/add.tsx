@@ -113,10 +113,18 @@ export default function AddScreen() {
     setLoading(true);
     try {
       const SecureStore = await import('expo-secure-store');
+      const ImageManipulator = await import('expo-image-manipulator');
       const token = await SecureStore.getItemAsync('cave_token');
 
+      // Compression avant envoi : redimensionne à 1000px de large, qualité 0.8
+      const compressed = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1000 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
       const formData = new FormData();
-      formData.append('image', { uri, name: 'label.jpg', type: 'image/jpeg' } as any);
+      formData.append('image', { uri: compressed.uri, name: 'label.jpg', type: 'image/jpeg' } as any);
 
       const res = await fetch(API_URL + '/api/bottles/scan-label', {
         method: 'POST',
