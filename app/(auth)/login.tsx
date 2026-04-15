@@ -86,6 +86,10 @@ export default function LoginScreen() {
                 : <Text style={s.btnText}>Se connecter</Text>
               }
             </TouchableOpacity>
+
+            <TouchableOpacity style={s.forgotBtn} onPress={() => router.push('/(auth)/forgot-password')}>
+              <Text style={s.forgotText}>Mot de passe oublié ?</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Lien vers register */}
@@ -134,6 +138,9 @@ const s = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   btnText: { fontSize: 16, fontWeight: '700', color: Colors.white },
+
+  forgotBtn:  { alignItems: 'center', paddingVertical: Spacing.sm, marginTop: 2 },
+  forgotText: { ...Typography.bodySmall, color: Colors.brunMoyen },
 
   footer:     { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: Spacing.xl, paddingBottom: Spacing.xl },
   footerText: { ...Typography.body, color: Colors.brunMoyen },
