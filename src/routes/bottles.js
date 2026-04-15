@@ -11,8 +11,10 @@ const upload = multer({
 // Toutes les routes bouteilles nécessitent l'auth
 router.use(authMiddleware);
 
-router.get('/recommend',     c.recommend);
-router.post('/suggest-wine', c.suggestWine);
+router.get('/recommend',             c.recommend);
+router.get('/taste-profile',         c.getTasteProfile);
+router.get('/smart-recommendations', c.getSmartRecommendations);
+router.post('/suggest-wine',         c.suggestWine);
 // scan-label reçoit un fichier multipart
 router.post('/scan-label',   upload.single('image'), c.scanLabel);
 

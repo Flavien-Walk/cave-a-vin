@@ -129,6 +129,177 @@ exports.recommend = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── GET /api/bottles/taste-profile ───────────────────────────────────────────
+exports.getTasteProfile = async (req, res, next) => {
+  try {
+    const uid = req.userId;
+
+    // Toutes les entrées avec une note
+    const ratedEntries = await ConsumptionHistory.find({ userId: uid, note: { $exists: true, $ne: null } })
+      .populate('bottleId', 'couleur region cepage annee nom producteur')
+      .lean();
+
+    if (ratedEntries.length === 0) {
+      return res.json({ totalRated: 0, avgRating: null, topCouleurs: [], topRegions: [], topCepages: [], topOccasions: [], recentDrinks: [] });
+    }
+
+    const avgRating = Math.round((ratedEntries.reduce((s, e) => s + e.note, 0) / ratedEntries.length) * 10) / 10;
+
+    // Agrégation par couleur
+    const byCouleur = {};
+    const byRegion  = {};
+    const byCepage  = {};
+    const byOccasion = {};
+
+    for (const e of ratedEntries) {
+      const b = e.bottleId;
+      if (!b) continue;
+
+      if (b.couleur) {
+        if (!byCouleur[b.couleur]) byCouleur[b.couleur] = { total: 0, count: 0 };
+        byCouleur[b.couleur].total += e.note;
+        byCouleur[b.couleur].count++;
+      }
+      if (b.region) {
+        if (!byRegion[b.region]) byRegion[b.region] = { total: 0, count: 0 };
+        byRegion[b.region].total += e.note;
+        byRegion[b.region].count++;
+      }
+      if (b.cepage) {
+        const cepages = b.cepage.split(/,|\//).map(c => c.trim()).filter(Boolean);
+        for (const c of cepages) {
+          if (!byCepage[c]) byCepage[c] = { total: 0, count: 0 };
+          byCepage[c].total += e.note;
+          byCepage[c].count++;
+        }
+      }
+      if (e.occasion) {
+        byOccasion[e.occasion] = (byOccasion[e.occasion] || 0) + 1;
+      }
+    }
+
+    const toRanked = (obj, minCount = 1) =>
+      Object.entries(obj)
+        .map(([key, v]) => ({ name: key, avgNote: Math.round((v.total / v.count) * 10) / 10, count: v.count }))
+        .filter(x => x.count >= minCount)
+        .sort((a, b) => b.avgNote - a.avgNote || b.count - a.count);
+
+    // 5 dernières dégustations avec note
+    const recentDrinks = ratedEntries
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5)
+      .map(e => ({
+        date:      e.date,
+        note:      e.note,
+        comment:   e.comment,
+        occasion:  e.occasion,
+        bottle:    e.bottleId,
+      }));
+
+    res.json({
+      totalRated:  ratedEntries.length,
+      avgRating,
+      topCouleurs: toRanked(byCouleur).slice(0, 6),
+      topRegions:  toRanked(byRegion).slice(0, 8),
+      topCepages:  toRanked(byCepage, 2).slice(0, 6),
+      topOccasions: Object.entries(byOccasion)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count })),
+      recentDrinks,
+    });
+  } catch (err) { next(err); }
+};
+
+// ── GET /api/bottles/smart-recommendations ───────────────────────────────────
+exports.getSmartRecommendations = async (req, res, next) => {
+  try {
+    const uid = req.userId;
+
+    // Profil de goût : couleurs/régions aimées (note >= 3.5)
+    const ratedEntries = await ConsumptionHistory.find({ userId: uid, note: { $exists: true, $ne: null } })
+      .populate('bottleId', 'couleur region cepage')
+      .lean();
+
+    const likedCouleurs = new Set();
+    const likedRegions  = new Set();
+    const dislikedCouleurs = new Set();
+    const couleurScores = {};
+    const regionScores  = {};
+
+    for (const e of ratedEntries) {
+      const b = e.bottleId;
+      if (!b) continue;
+      if (b.couleur) {
+        if (!couleurScores[b.couleur]) couleurScores[b.couleur] = { total: 0, count: 0 };
+        couleurScores[b.couleur].total += e.note;
+        couleurScores[b.couleur].count++;
+      }
+      if (b.region) {
+        if (!regionScores[b.region]) regionScores[b.region] = { total: 0, count: 0 };
+        regionScores[b.region].total += e.note;
+        regionScores[b.region].count++;
+      }
+    }
+
+    for (const [c, v] of Object.entries(couleurScores)) {
+      const avg = v.total / v.count;
+      if (avg >= 3.5) likedCouleurs.add(c);
+      if (avg < 2.5)  dislikedCouleurs.add(c);
+    }
+    for (const [r, v] of Object.entries(regionScores)) {
+      if (v.total / v.count >= 3.5) likedRegions.add(r);
+    }
+
+    // Bouteilles disponibles dans la cave
+    const available = await Bottle.find({ userId: uid, quantite: { $gt: 0 } }).lean();
+
+    // Bouteilles déjà notées (exclure les moins aimées)
+    const alreadyRatedIds = new Set(
+      ratedEntries.filter(e => e.note >= 3).map(e => e.bottleId?._id?.toString())
+    );
+
+    const scored = available.map(b => {
+      let score = 0;
+      const reasons = [];
+
+      if (likedCouleurs.has(b.couleur)) {
+        score += 30;
+        reasons.push(`Couleur ${b.couleur} appréciée`);
+      }
+      if (dislikedCouleurs.has(b.couleur)) score -= 20;
+
+      if (b.region && likedRegions.has(b.region)) {
+        score += 25;
+        reasons.push(`Région ${b.region} appréciée`);
+      }
+
+      // Bonus si déjà goûté et aimé (même bouteille notée ≥4)
+      if (alreadyRatedIds.has(b._id.toString())) {
+        const bestNote = Math.max(...ratedEntries.filter(e => e.bottleId?._id?.toString() === b._id.toString()).map(e => e.note));
+        if (bestNote >= 4) { score += 20; reasons.push('Vous avez adoré ce vin'); }
+        else if (bestNote >= 3) { score += 10; reasons.push('Vous avez apprécié ce vin'); }
+      }
+
+      // Bonus bouteilles urgentes (à consommer)
+      const year = new Date().getFullYear();
+      if (b.consommerAvant && b.consommerAvant <= year + 1) {
+        score += 10;
+        reasons.push('À consommer bientôt');
+      }
+
+      return { bottle: b, score, reasons };
+    });
+
+    const recommendations = scored
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+
+    res.json({ recommendations, hasProfile: ratedEntries.length > 0 });
+  } catch (err) { next(err); }
+};
+
 // ── POST /api/bottles/suggest-wine ───────────────────────────────────────────
 exports.suggestWine = async (req, res, next) => {
   try {
