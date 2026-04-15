@@ -20,7 +20,7 @@ const OCCASIONS = ['Repas du soir', 'Repas en famille', 'Repas romantique', 'Ap�
 
 export default function BottleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { bottles, toggleFavorite, drinkBottle, addNote, deleteNote, deleteBottle } = useBottleStore();
+  const { bottles, toggleFavorite, drinkBottle, updateBottle, deleteNote, deleteBottle } = useBottleStore();
   const insets = useSafeAreaInsets();
 
   const [bottle, setBottle]   = useState<Bottle | null>(bottles.find(b => b._id === id) ?? null);
@@ -39,10 +39,9 @@ export default function BottleDetailScreen() {
   const [drinkLoading,  setDrinkLoading]  = useState(false);
 
   // Note modal state
-  const [noteValue,    setNoteValue]   = useState(0);
-  const [noteTexte,    setNoteTexte]   = useState('');
-  const [noteOccasion, setNoteOccasion] = useState('');
-  const [noteLoading,  setNoteLoading] = useState(false);
+  const [noteValue,   setNoteValue]  = useState(0);
+  const [noteTexte,   setNoteTexte]  = useState('');
+  const [noteLoading, setNoteLoading] = useState(false);
 
   const loadFull = useCallback(async () => {
     if (!id) return;
@@ -102,13 +101,23 @@ export default function BottleDetailScreen() {
     }
   };
 
-  const handleAddNote = async () => {
+  const openNoteModal = () => {
+    // Pré-remplir avec la note existante si elle existe
+    if (bottle.notePerso) {
+      setNoteValue(bottle.notePerso.note ?? 0);
+      setNoteTexte(bottle.notePerso.texte ?? '');
+    } else {
+      setNoteValue(0); setNoteTexte('');
+    }
+    setShowNote(true);
+  };
+
+  const handleSaveNote = async () => {
     if (!noteValue) { Alert.alert('Choisissez une note'); return; }
     setNoteLoading(true);
     try {
-      await addNote(bottle._id, { note: noteValue, texte: noteTexte || undefined, occasion: noteOccasion || undefined });
+      await updateBottle(bottle._id, { notePerso: { note: noteValue, texte: noteTexte || '' } });
       setShowNote(false);
-      setNoteValue(0); setNoteTexte(''); setNoteOccasion('');
       await loadFull();
     } catch (err: any) {
       Alert.alert('Erreur', err.message);
@@ -208,39 +217,60 @@ export default function BottleDetailScreen() {
           </InfoCard>
         )}
 
-        {/* ── Notes de dégustation ── */}
+        {/* ── Ma note ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="star-outline" size={16} color={Colors.lieDeVin} />
-            <Text style={styles.cardTitle}>Notes de dégustation</Text>
+            <Text style={styles.cardTitle}>Ma note</Text>
             <TouchableOpacity
               style={styles.addNoteBtn}
-              onPress={() => setShowNote(true)}
-              accessibilityLabel="Ajouter une note"
+              onPress={openNoteModal}
+              accessibilityLabel={bottle.notePerso ? 'Modifier ma note' : 'Ajouter ma note'}
             >
-              <Ionicons name="add" size={18} color={Colors.lieDeVin} />
+              <Ionicons name={bottle.notePerso ? 'pencil-outline' : 'add'} size={18} color={Colors.lieDeVin} />
             </TouchableOpacity>
           </View>
 
-          {bottle.notes.length === 0
-            ? <Text style={styles.emptyNotes}>Aucune note pour l'instant.</Text>
-            : bottle.notes.slice().reverse().map(n => (
-                <View key={n._id} style={styles.noteRow}>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.noteTop}>
-                      <StarRating value={n.note} readonly size={14} />
-                      {n.occasion ? <Text style={styles.noteOccasion}>{n.occasion}</Text> : null}
-                    </View>
-                    {n.texte ? <Text style={styles.noteTexte}>{n.texte}</Text> : null}
-                    <Text style={styles.noteDate}>{new Date(n.date).toLocaleDateString('fr-FR')}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleDeleteNote(n._id)} accessibilityLabel="Supprimer cette note">
-                    <Ionicons name="trash-outline" size={16} color={Colors.brunClair} />
-                  </TouchableOpacity>
+          {!bottle.notePerso
+            ? <Text style={styles.emptyNotes}>Aucune note personnelle pour l'instant.</Text>
+            : (
+              <View style={styles.noteRow}>
+                <View style={{ flex: 1 }}>
+                  <StarRating value={bottle.notePerso.note} readonly size={16} />
+                  {bottle.notePerso.texte ? <Text style={styles.noteTexte}>{bottle.notePerso.texte}</Text> : null}
                 </View>
-              ))
+                <TouchableOpacity onPress={openNoteModal} accessibilityLabel="Modifier ma note">
+                  <Ionicons name="pencil-outline" size={16} color={Colors.brunClair} />
+                </TouchableOpacity>
+              </View>
+            )
           }
         </View>
+
+        {/* ── Notes de dégustation ── */}
+        {bottle.notes.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="document-text-outline" size={16} color={Colors.brunMoyen} />
+              <Text style={styles.cardTitle}>Dégustations notées</Text>
+            </View>
+            {bottle.notes.slice().reverse().map(n => (
+              <View key={n._id} style={styles.noteRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.noteTop}>
+                    <StarRating value={n.note} readonly size={14} />
+                    {n.occasion ? <Text style={styles.noteOccasion}>{n.occasion}</Text> : null}
+                  </View>
+                  {n.texte ? <Text style={styles.noteTexte}>{n.texte}</Text> : null}
+                  <Text style={styles.noteDate}>{new Date(n.date).toLocaleDateString('fr-FR')}</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleDeleteNote(n._id)} accessibilityLabel="Supprimer cette note">
+                  <Ionicons name="trash-outline" size={16} color={Colors.brunClair} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* ── Historique consommation ── */}
         {history.length > 0 && (
@@ -345,7 +375,7 @@ export default function BottleDetailScreen() {
           <TouchableOpacity style={styles.overlayDismiss} activeOpacity={1} onPress={() => setShowNote(false)} />
           <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom + Spacing.md, Spacing.xl) }]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Ajouter une note</Text>
+            <Text style={styles.modalTitle}>{bottle.notePerso ? 'Modifier ma note' : 'Ajouter ma note'}</Text>
             <Text style={styles.modalLabel}>Note *</Text>
             <View style={styles.starRow}>
               <StarRating value={noteValue} onChange={setNoteValue} size={40} />
@@ -356,10 +386,9 @@ export default function BottleDetailScreen() {
               )}
             </View>
             <Input label="Commentaire" placeholder="Arômes, texture, accord…" value={noteTexte} onChangeText={setNoteTexte} multiline numberOfLines={3} style={{ marginTop: Spacing.md }} />
-            <Input label="Occasion" placeholder="ex : Repas de famille, apéritif…" value={noteOccasion} onChangeText={setNoteOccasion} />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: Spacing.lg }}>
               <Button label="Annuler" variant="secondary" onPress={() => setShowNote(false)} style={{ flex: 1 }} />
-              <Button label="Enregistrer" onPress={handleAddNote} loading={noteLoading} style={{ flex: 2 }} />
+              <Button label="Enregistrer" onPress={handleSaveNote} loading={noteLoading} style={{ flex: 2 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

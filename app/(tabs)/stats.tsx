@@ -14,7 +14,7 @@ const WINE_LABELS: Record<string, string> = {
 
 export default function StatsScreen() {
   const { stats, isStatsLoading, fetchStats } = useBottleStore();
-  const { setFilter, clearFilters } = useUIStore();
+  const { setFilter, clearFilters, setSortBy } = useUIStore();
   useEffect(() => { fetchStats(); }, []);
 
   const goToFiltered = (filter: 'favoritesOnly' | 'urgentOnly') => {
@@ -64,12 +64,14 @@ export default function StatsScreen() {
                 sub={`${stats.totalReferences} références`}
                 color={Colors.lieDeVin}
                 large
+                onPress={() => { clearFilters(); router.push('/(tabs)/cave'); }}
               />
               <KpiCard
                 icon="pricetag-outline"
                 value={formatPrice(stats.totalValue)}
                 label="valeur estimée"
                 color={Colors.ambreChaud}
+                onPress={() => { clearFilters(); setSortBy('prix'); router.push('/(tabs)/cave'); }}
               />
             </View>
 

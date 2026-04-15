@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
-import { useBottleStore, useAuthStore, useCavesStore } from '../../src/stores';
+import { useBottleStore, useAuthStore, useCavesStore, useUIStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
 import { getRecommendations } from '../../src/utils/recommendation';
@@ -17,6 +17,7 @@ export default function DashboardScreen() {
   const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
   const { user } = useAuthStore();
   const { caves, activeCave, fetchCaves, setActiveCave } = useCavesStore();
+  const { clearFilters, setSortBy } = useUIStore();
 
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
 
@@ -56,9 +57,9 @@ export default function DashboardScreen() {
           <View style={s.statsCard}>
             <StatCell value={stats.totalBottles.toLocaleString('fr-FR')} label="bouteilles" onPress={() => router.push('/(tabs)/cave')} />
             <View style={s.sep} />
-            <StatCell value={stats.totalReferences.toString()} label="références" />
+            <StatCell value={stats.totalReferences.toString()} label="références" onPress={() => router.push('/(tabs)/cave')} />
             <View style={s.sep} />
-            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => router.push('/(tabs)/stats' as any)} />
+            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => { clearFilters(); setSortBy('prix'); router.push('/(tabs)/cave'); }} />
           </View>
         )}
 
