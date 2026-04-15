@@ -21,6 +21,7 @@ app.use('/api/auth',     require('./src/routes/auth'));
 app.use('/api/bottles',  require('./src/routes/bottles'));
 app.use('/api/stats',    require('./src/routes/stats'));
 app.use('/api/wishlist', require('./src/routes/wishlist'));
+app.use('/api/caves',    require('./src/routes/caves'));
 
 // Health check
 app.get('/health', (_req, res) => {
