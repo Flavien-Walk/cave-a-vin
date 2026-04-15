@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Image,
+  Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Image, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -18,6 +18,19 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://cave-a-vin-kwx0.onre
 
 const STEP_LABELS = ['Identité', 'Détails', 'Cave'];
 
+interface ScanResult {
+  nom:         string | null;
+  producteur:  string | null;
+  annee:       number | null;
+  couleur:     string | null;
+  region:      string | null;
+  appellation: string | null;
+  confidence:  number;
+  detected:    string[];
+  partial:     boolean;
+  message:     string;
+}
+
 // Options pour selects
 const couleurOptions: SelectOption[] = COULEURS_VIN.map(c => ({ label: c, value: c }));
 const regionOptions: SelectOption[]  = REGIONS.map(r => ({ label: r, value: r }));
@@ -32,9 +45,11 @@ export default function AddScreen() {
 
   // Scan
   const [permission, requestPermission] = useCameraPermissions();
-  const [showScan, setShowScan]   = useState(false);
-  const [scanning, setScanning]   = useState(false);
-  const [photoUri, setPhotoUri]   = useState<string | null>(null);
+  const [showScan, setShowScan]         = useState(false);
+  const [scanning, setScanning]         = useState(false);
+  const [photoUri, setPhotoUri]         = useState<string | null>(null);
+  const [scanResult, setScanResult]     = useState<ScanResult | null>(null);
+  const [showResult, setShowResult]     = useState(false);
   const cameraRef = useRef<any>(null);
 
   // Étape 0 — identité
@@ -70,6 +85,7 @@ export default function AddScreen() {
       const res = await requestPermission();
       if (!res.granted) { Alert.alert('Permission caméra refusée'); return; }
     }
+    setScanResult(null);
     setShowScan(true);
   };
 
@@ -77,11 +93,16 @@ export default function AddScreen() {
     if (!cameraRef.current || scanning) return;
     setScanning(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
+      // Qualité élevée pour meilleure reconnaissance OCR
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.92,
+        base64: false,
+        exif: false,
+      });
       setPhotoUri(photo.uri);
       setShowScan(false);
       await analyzeLabel(photo.uri);
-    } catch (e) {
+    } catch {
       Alert.alert('Erreur', 'Impossible de prendre la photo.');
     } finally {
       setScanning(false);
@@ -91,30 +112,44 @@ export default function AddScreen() {
   const analyzeLabel = async (uri: string) => {
     setLoading(true);
     try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const token = await AsyncStorage.getItem('@cave_token');
+
       const formData = new FormData();
       formData.append('image', { uri, name: 'label.jpg', type: 'image/jpeg' } as any);
-      const res = await fetch(API_URL + '/bottles/scan-label', {
+
+      const res = await fetch(API_URL + '/api/bottles/scan-label', {
         method: 'POST',
         body: formData,
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.nom)         setNom(data.nom);
-        if (data.producteur)  setProducteur(data.producteur);
-        if (data.annee)       setAnnee(String(data.annee));
-        if (data.region)      setRegion(data.region);
-        if (data.appellation) setAppellation(data.appellation);
-        if (data.couleur)     setCouleur(data.couleur);
-        Alert.alert('Étiquette analysée', 'Vérifiez et complétez les informations.');
+
+      const data = await res.json();
+
+      if (res.ok && data) {
+        setScanResult(data);
+        setShowResult(true);
       } else {
-        Alert.alert('Non reconnu', 'Complétez les informations manuellement.');
+        Alert.alert('Analyse impossible', 'Complétez les informations manuellement.');
       }
     } catch {
-      Alert.alert('Non reconnu', 'Complétez les informations manuellement.');
+      Alert.alert('Analyse impossible', 'Vérifiez votre connexion et réessayez.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyScanResult = (result: ScanResult) => {
+    if (result.nom)         setNom(result.nom);
+    if (result.producteur)  setProducteur(result.producteur);
+    if (result.annee)       setAnnee(String(result.annee));
+    if (result.region)      setRegion(result.region);
+    if (result.appellation) setAppellation(result.appellation);
+    if (result.couleur)     setCouleur(result.couleur as CouleurVin);
+    setShowResult(false);
   };
 
   // ── Validation ──
@@ -251,29 +286,162 @@ export default function AddScreen() {
         }
       </View>
 
+      {/* Overlay analyse en cours */}
+      {loading && (
+        <View style={scan.loadingOverlay}>
+          <View style={scan.loadingCard}>
+            <ActivityIndicator color={Colors.lieDeVin} size="large" />
+            <Text style={scan.loadingTitle}>Analyse de l'étiquette…</Text>
+            <Text style={scan.loadingText}>Extraction des informations en cours</Text>
+          </View>
+        </View>
+      )}
+
       {/* Modal camera */}
       <Modal visible={showScan} animationType="slide">
         <View style={cam.container}>
           <CameraView ref={cameraRef} style={cam.camera} facing="back">
             <View style={cam.overlay}>
-              <TouchableOpacity style={cam.close} onPress={() => setShowScan(false)}>
-                <Ionicons name="close" size={28} color={Colors.white} />
-              </TouchableOpacity>
-              <View style={cam.guide}>
-                <View style={cam.frame} />
-                <Text style={cam.hint}>Cadrez l'étiquette de la bouteille</Text>
+              {/* Fermer */}
+              <View style={cam.topBar}>
+                <TouchableOpacity style={cam.close} onPress={() => setShowScan(false)}>
+                  <Ionicons name="close" size={24} color={Colors.white} />
+                </TouchableOpacity>
+                <Text style={cam.topTitle}>Scanner l'étiquette</Text>
+                <View style={{ width: 40 }} />
               </View>
-              <TouchableOpacity style={cam.shutter} onPress={takePhoto} disabled={scanning}>
-                {scanning
-                  ? <ActivityIndicator color={Colors.white} />
-                  : <View style={cam.shutterInner} />
-                }
-              </TouchableOpacity>
+
+              {/* Cadre de guidage */}
+              <View style={cam.guide}>
+                <View style={cam.frameBorder}>
+                  {/* Coins décoratifs */}
+                  <View style={[cam.corner, cam.cornerTL]} />
+                  <View style={[cam.corner, cam.cornerTR]} />
+                  <View style={[cam.corner, cam.cornerBL]} />
+                  <View style={[cam.corner, cam.cornerBR]} />
+                </View>
+                <Text style={cam.hint}>Centrez l'étiquette dans le cadre</Text>
+                <Text style={cam.hintSub}>La lumière naturelle améliore la reconnaissance</Text>
+              </View>
+
+              {/* Déclencheur */}
+              <View style={cam.shutterArea}>
+                <TouchableOpacity style={cam.shutter} onPress={takePhoto} disabled={scanning} activeOpacity={0.8}>
+                  {scanning
+                    ? <ActivityIndicator color={Colors.white} size="large" />
+                    : <View style={cam.shutterInner} />
+                  }
+                </TouchableOpacity>
+              </View>
             </View>
           </CameraView>
         </View>
       </Modal>
+
+      {/* Modal résultat scan */}
+      <Modal visible={showResult} animationType="slide" transparent>
+        <View style={scan.backdrop}>
+          <View style={scan.sheet}>
+            {scanResult && (
+              <ScanResultSheet
+                result={scanResult}
+                photoUri={photoUri}
+                onApply={() => applyScanResult(scanResult)}
+                onRetry={() => { setShowResult(false); openScan(); }}
+                onDismiss={() => setShowResult(false)}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
+  );
+}
+
+// ── ScanResultSheet ────────────────────────────────────────────────────────────
+
+function ScanResultSheet({ result, photoUri, onApply, onRetry, onDismiss }: {
+  result: ScanResult;
+  photoUri: string | null;
+  onApply: () => void;
+  onRetry: () => void;
+  onDismiss: () => void;
+}) {
+  const confidenceColor = result.confidence >= 70 ? Colors.vertSauge : result.confidence >= 35 ? Colors.ambreChaud : Colors.rougeAlerte;
+  const confidenceBg    = result.confidence >= 70 ? Colors.vertSaugeLight : result.confidence >= 35 ? Colors.ambreChaudLight : Colors.rougeAlerteLight;
+
+  const fields = [
+    { key: 'nom',         label: 'Nom du vin',  value: result.nom },
+    { key: 'producteur',  label: 'Producteur',  value: result.producteur },
+    { key: 'annee',       label: 'Millésime',   value: result.annee ? String(result.annee) : null },
+    { key: 'couleur',     label: 'Couleur',     value: result.couleur },
+    { key: 'region',      label: 'Région',      value: result.region },
+    { key: 'appellation', label: 'Appellation', value: result.appellation },
+  ];
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false}>
+      {/* En-tête */}
+      <View style={scan.sheetHeader}>
+        {photoUri && (
+          <Image source={{ uri: photoUri }} style={scan.thumb} />
+        )}
+        <View style={scan.sheetTitles}>
+          <Text style={scan.sheetTitle}>Résultat du scan</Text>
+          <View style={[scan.confidencePill, { backgroundColor: confidenceBg }]}>
+            <Text style={[scan.confidenceText, { color: confidenceColor }]}>
+              {result.confidence}% de confiance
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Message contextuel */}
+      <View style={[scan.messageBanner, { backgroundColor: confidenceBg, borderColor: confidenceColor + '40' }]}>
+        <Ionicons
+          name={result.confidence >= 70 ? 'checkmark-circle-outline' : result.confidence >= 35 ? 'alert-circle-outline' : 'close-circle-outline'}
+          size={16}
+          color={confidenceColor}
+        />
+        <Text style={[scan.messageText, { color: confidenceColor }]}>{result.message}</Text>
+      </View>
+
+      {/* Champs détectés */}
+      <Text style={scan.fieldsTitle}>Informations détectées</Text>
+      {fields.map(f => (
+        <View key={f.key} style={scan.fieldRow}>
+          <View style={[scan.fieldCheck, { backgroundColor: f.value ? Colors.vertSaugeLight : Colors.parchemin }]}>
+            <Ionicons
+              name={f.value ? 'checkmark' : 'remove'}
+              size={12}
+              color={f.value ? Colors.vertSauge : Colors.brunClair}
+            />
+          </View>
+          <Text style={scan.fieldLabel}>{f.label}</Text>
+          <Text style={[scan.fieldValue, !f.value && scan.fieldValueEmpty]} numberOfLines={1}>
+            {f.value ?? '—'}
+          </Text>
+        </View>
+      ))}
+
+      {/* Actions */}
+      <View style={scan.actions}>
+        <TouchableOpacity style={scan.btnPrimary} onPress={onApply} activeOpacity={0.85}>
+          <Ionicons name="checkmark" size={16} color={Colors.white} />
+          <Text style={scan.btnPrimaryText}>
+            {result.confidence >= 35 ? 'Appliquer et vérifier' : 'Remplir quand même'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={scan.btnSecondary} onPress={onRetry} activeOpacity={0.8}>
+          <Ionicons name="camera-outline" size={16} color={Colors.lieDeVin} />
+          <Text style={scan.btnSecondaryText}>Rescanner</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={scan.btnGhost} onPress={onDismiss}>
+          <Text style={scan.btnGhostText}>Saisie manuelle</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -306,17 +474,61 @@ const s = StyleSheet.create({
 });
 
 const cam = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  camera:    { flex: 1 },
-  overlay:   { flex: 1, justifyContent: 'space-between', paddingVertical: 50, paddingHorizontal: Spacing.lg },
-  close:     { alignSelf: 'flex-end', padding: Spacing.sm },
-  guide:     { alignItems: 'center', gap: Spacing.lg },
-  frame: {
-    width: 260, height: 160, borderRadius: Radius.lg,
-    borderWidth: 2, borderColor: Colors.white,
-    borderStyle: 'dashed',
+  container:   { flex: 1, backgroundColor: '#000' },
+  camera:      { flex: 1 },
+  overlay:     { flex: 1, justifyContent: 'space-between', backgroundColor: 'transparent' },
+  topBar:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingHorizontal: Spacing.lg },
+  close:       { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  topTitle:    { fontSize: 16, fontWeight: '700', color: Colors.white },
+  guide:       { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xxl },
+  frameBorder: {
+    width: 270, height: 170, borderRadius: Radius.lg,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)',
+    position: 'relative',
   },
-  hint:       { color: Colors.white, fontSize: 14, fontWeight: '600', textAlign: 'center', opacity: 0.85 },
-  shutter:    { alignSelf: 'center', width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: Colors.white },
-  shutterInner:{ width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.white },
+  corner:   { position: 'absolute', width: 24, height: 24, borderColor: Colors.white, borderWidth: 3 },
+  cornerTL: { top: -2, left: -2, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+  cornerTR: { top: -2, right: -2, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+  cornerBL: { bottom: -2, left: -2, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+  cornerBR: { bottom: -2, right: -2, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+  hint:        { color: Colors.white, fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  hintSub:     { color: 'rgba(255,255,255,0.6)', fontSize: 12, textAlign: 'center' },
+  shutterArea: { alignItems: 'center', paddingBottom: 56 },
+  shutter:     { width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: Colors.white },
+  shutterInner:{ width: 54, height: 54, borderRadius: 27, backgroundColor: Colors.white },
+});
+
+const scan = StyleSheet.create({
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(250,250,248,0.92)', alignItems: 'center', justifyContent: 'center', zIndex: 99 },
+  loadingCard:    { alignItems: 'center', gap: Spacing.md, padding: Spacing.xl },
+  loadingTitle:   { fontSize: 17, fontWeight: '700', color: Colors.brunMoka },
+  loadingText:    { fontSize: 13, color: Colors.brunMoyen },
+
+  backdrop: { flex: 1, backgroundColor: 'rgba(26,16,8,0.5)', justifyContent: 'flex-end' },
+  sheet:    { backgroundColor: Colors.champagne, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingBottom: 40, paddingTop: Spacing.lg, maxHeight: '90%' },
+
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
+  thumb:        { width: 60, height: 80, borderRadius: Radius.md, backgroundColor: Colors.parchemin },
+  sheetTitles:  { flex: 1, gap: 6 },
+  sheetTitle:   { fontSize: 18, fontWeight: '800', color: Colors.brunMoka },
+  confidencePill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },
+  confidenceText: { fontSize: 12, fontWeight: '700' },
+
+  messageBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.lg, borderWidth: 1 },
+  messageText:   { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+
+  fieldsTitle: { fontSize: 12, fontWeight: '700', color: Colors.brunClair, letterSpacing: 0.8, marginBottom: Spacing.sm },
+  fieldRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: Colors.parchemin },
+  fieldCheck:  { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  fieldLabel:  { width: 90, fontSize: 13, color: Colors.brunMoyen },
+  fieldValue:  { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.brunMoka, textAlign: 'right' },
+  fieldValueEmpty: { color: Colors.brunClair, fontWeight: '400' },
+
+  actions:         { gap: Spacing.sm, marginTop: Spacing.xl },
+  btnPrimary:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.lieDeVin, borderRadius: Radius.full, paddingVertical: 15 },
+  btnPrimaryText:  { fontSize: 15, fontWeight: '700', color: Colors.white },
+  btnSecondary:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingVertical: 14, borderWidth: 1, borderColor: Colors.lieDeVin + '30' },
+  btnSecondaryText:{ fontSize: 14, fontWeight: '600', color: Colors.lieDeVin },
+  btnGhost:        { alignItems: 'center', paddingVertical: 10 },
+  btnGhostText:    { fontSize: 13, color: Colors.brunMoyen },
 });
