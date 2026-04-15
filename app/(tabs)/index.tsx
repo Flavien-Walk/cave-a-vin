@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
-import { useBottleStore, useAuthStore } from '../../src/stores';
+import { useBottleStore, useAuthStore, useCavesStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
 import { getRecommendations } from '../../src/utils/recommendation';
@@ -16,8 +16,9 @@ const ANECDOTE = ANECDOTES[Math.floor(Math.random() * ANECDOTES.length)];
 export default function DashboardScreen() {
   const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
   const { user } = useAuthStore();
+  const { caves, activeCave, fetchCaves, setActiveCave } = useCavesStore();
 
-  useEffect(() => { fetchBottles(); fetchStats(); }, []);
+  useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
 
   const favorites   = useMemo(() => bottles.filter(b => b.isFavorite).slice(0, 3), [bottles]);
   const recent      = useMemo(() => [...bottles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottles]);
@@ -26,8 +27,8 @@ export default function DashboardScreen() {
 
   // Suggestion "Ce soir" — top 1 accord avec viande rouge (plat polyvalent)
   const suggestion  = useMemo(() => {
-    const recs = getRecommendations(bottles, 'boeuf');
-    return recs.length > 0 ? recs[0] : null;
+    const result = getRecommendations(bottles, 'boeuf');
+    return result.wines.length > 0 ? result.wines[0] : null;
   }, [bottles]);
 
   const firstName = user?.name?.split(' ')[0] ?? 'vous';
@@ -58,6 +59,30 @@ export default function DashboardScreen() {
             <StatCell value={stats.totalReferences.toString()} label="références" />
             <View style={s.sep} />
             <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold />
+          </View>
+        )}
+
+        {/* Sélecteur de cave */}
+        {caves.length > 0 && (
+          <View style={s.caveRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm }}>
+                {caves.map(c => (
+                  <TouchableOpacity
+                    key={c._id}
+                    style={[s.cavePill, activeCave?._id === c._id && s.cavePillActive]}
+                    onPress={() => setActiveCave(c)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="home" size={12} color={activeCave?._id === c._id ? Colors.white : Colors.lieDeVin} />
+                    <Text style={[s.cavePillText, activeCave?._id === c._id && s.cavePillTextActive]}>{c.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+            <TouchableOpacity style={s.caveManageBtn} onPress={() => router.push('/manage-caves' as any)}>
+              <Ionicons name="settings-outline" size={16} color={Colors.brunMoyen} />
+            </TouchableOpacity>
           </View>
         )}
 
@@ -200,6 +225,13 @@ const s = StyleSheet.create({
   sep:       { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
   statValue: { fontSize: 20, fontWeight: '800', color: Colors.white },
   statLabel: { fontSize: 10, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+
+  caveRow:          { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
+  cavePill:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
+  cavePillActive:   { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
+  cavePillText:     { fontSize: 13, fontWeight: '600', color: Colors.lieDeVin },
+  cavePillTextActive:{ color: Colors.white },
+  caveManageBtn:    { padding: 6, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
 
   alert: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,

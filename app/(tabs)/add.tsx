@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Image, Animated,
@@ -8,9 +8,9 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
-import { CAVES, COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../../src/constants';
-import { useBottleStore } from '../../src/stores';
-import { Input, Button, SelectModal } from '../../src/components/ui';
+import { COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../../src/constants';
+import { useBottleStore, useCavesStore } from '../../src/stores';
+import { Input, Button, SelectModal, StarRating } from '../../src/components/ui';
 import type { SelectOption } from '../../src/components/ui';
 import type { CouleurVin, FormatBouteille } from '../../src/types';
 
@@ -40,6 +40,7 @@ const formatOptions: SelectOption[]  = FORMATS_BOUTEILLE.map(f => ({ label: f.la
 
 export default function AddScreen() {
   const { addBottle } = useBottleStore();
+  const { caves, activeCave, fetchCaves } = useCavesStore();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -69,14 +70,23 @@ export default function AddScreen() {
   const [consommerAvant, setConsommerAvant] = useState('');
   const [lieuAchat, setLieuAchat] = useState('');
   const [description, setDescription] = useState('');
+  const [notePerso, setNotePerso] = useState(0);
 
   // Étape 2 — cave
   const [cave, setCave]           = useState('');
   const [emplacement, setEmplacement] = useState('');
 
-  const caveOptions: SelectOption[] = CAVES.map(c => ({ label: c.name, value: c.name }));
+  useEffect(() => {
+    fetchCaves();
+  }, []);
+
+  useEffect(() => {
+    if (activeCave && !cave) setCave(activeCave.name);
+  }, [activeCave]);
+
+  const caveOptions: SelectOption[] = caves.map(c => ({ label: c.name, value: c.name }));
   const emplacementOptions: SelectOption[] = cave
-    ? (CAVES.find(c => c.name === cave)?.emplacements ?? []).map(e => ({ label: e, value: e }))
+    ? (caves.find(c => c.name === cave)?.emplacements ?? []).map(e => ({ label: e, value: e }))
     : [];
 
   // ── Scan étiquette ──
@@ -173,6 +183,16 @@ export default function AddScreen() {
 
   const handleNext = () => { if (validateStep()) setStep(s => s + 1); };
 
+  const resetForm = () => {
+    setStep(0);
+    setNom(''); setProducteur(''); setCouleur(''); setAnnee('');
+    setRegion(''); setAppellation(''); setPays('France'); setCepage('');
+    setQuantite('1'); setFormat(''); setPrixAchat(''); setConsommerAvant('');
+    setLieuAchat(''); setDescription(''); setNotePerso(0);
+    setCave(''); setEmplacement('');
+    setPhotoUri(null); setScanResult(null);
+  };
+
   const handleSave = async () => {
     if (!validateStep()) return;
     setLoading(true);
@@ -188,9 +208,11 @@ export default function AddScreen() {
         prixAchat: prixAchat ? parseFloat(prixAchat) : undefined,
         consommerAvant: consommerAvant ? parseInt(consommerAvant) : undefined,
         lieuAchat: lieuAchat.trim() || undefined,
+        notePerso: notePerso > 0 ? { note: notePerso, texte: '' } : undefined,
         source: 'manual',
         cave, emplacement,
       });
+      resetForm();
       router.back();
     } catch (e: any) {
       Alert.alert('Erreur', e.message);
@@ -245,7 +267,7 @@ export default function AddScreen() {
         </View>
       )}
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={s.form} keyboardShouldPersistTaps="handled">
 
           {/* Étape 0 — Identité */}
@@ -271,6 +293,15 @@ export default function AddScreen() {
               <Input label="À consommer avant (année)" value={consommerAvant} onChangeText={setConsommerAvant} keyboardType="numeric" placeholder="ex : 2030" />
               <Input label="Lieu d'achat" value={lieuAchat} onChangeText={setLieuAchat} placeholder="ex : Cave Nicolas, En ligne" />
               <Input label="Notes personnelles" value={description} onChangeText={setDescription} multiline numberOfLines={3} placeholder="Impressions, contexte..." />
+              <View style={s.notePersoRow}>
+                <Text style={s.notePersoLabel}>Ma note</Text>
+                <StarRating value={notePerso} onChange={setNotePerso} size={28} />
+                {notePerso > 0 && (
+                  <TouchableOpacity onPress={() => setNotePerso(0)}>
+                    <Ionicons name="close-circle-outline" size={18} color={Colors.brunClair} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </>
           )}
 
@@ -477,8 +508,10 @@ const s = StyleSheet.create({
   photoThumb:   { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.parchemin },
   photoText:    { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
 
-  form:    { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  footer:  { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, paddingBottom: Spacing.xl, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  form:          { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+  footer:        { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, paddingBottom: Spacing.xl, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  notePersoRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
+  notePersoLabel:{ fontSize: 14, fontWeight: '600', color: Colors.brunMoyen, flex: 1 },
 });
 
 const cam = StyleSheet.create({

@@ -14,7 +14,7 @@ import { getRecommendations, analyzeFood } from '../../src/utils/recommendation'
 import { getWineColorHex } from '../../src/utils/bottle.utils';
 import { router } from 'expo-router';
 import type { WishlistItem, WishlistPriorite, Bottle, TasteProfile, SmartReco } from '../../src/types';
-import type { WineRecommendation } from '../../src/utils/recommendation';
+import type { WineRecommendation, RecommendationResult } from '../../src/utils/recommendation';
 
 const TABS = ['Accords & plats', 'Mes Goûts', 'À boire bientôt', 'Wishlist'] as const;
 type Tab = typeof TABS[number];
@@ -31,7 +31,7 @@ export default function DiscoverScreen() {
 
   // Accords
   const [plat, setPlat] = useState('');
-  const [recs, setRecs] = useState<WineRecommendation[]>([]);
+  const [recoResult, setRecoResult] = useState<RecommendationResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
   // Mes Goûts
@@ -85,7 +85,7 @@ export default function DiscoverScreen() {
     if (!q.trim()) return;
     setPlat(q);
     const results = getRecommendations(bottles, q);
-    setRecs(results);
+    setRecoResult(results);
     setHasSearched(true);
   };
 
@@ -102,6 +102,7 @@ export default function DiscoverScreen() {
   const activeItems    = items.filter(i => !i.isPurchased);
   const purchasedItems = items.filter(i => i.isPurchased);
   const foodProfile    = hasSearched ? analyzeFood(plat) : null;
+  const recs           = recoResult?.wines ?? [];
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -158,13 +159,28 @@ export default function DiscoverScreen() {
             </View>
 
             {/* Résultats */}
-            {hasSearched && (
+            {hasSearched && recoResult && (
               <>
                 {foodProfile && (
                   <View style={s.profileBadge}>
                     <Text style={s.profileText}>
-                      Plat détecté : <Text style={{ fontWeight: '700' }}>{foodProfile.label}</Text>
+                      Plat détecté : <Text style={{ fontWeight: '700' }}>{recoResult.foodLabel || foodProfile.label}</Text>
                     </Text>
+                  </View>
+                )}
+
+                {/* Message honnête */}
+                {recoResult.message ? (
+                  <View style={[s.messageBox, recoResult.bestLevel === 'ideal' ? s.messageIdeal : recoResult.bestLevel === 'aucun' ? s.messageAucun : s.messageBon]}>
+                    <Text style={s.messageText}>{recoResult.message}</Text>
+                  </View>
+                ) : null}
+
+                {/* Suggestion d'achat si aucun bon accord */}
+                {recoResult.idealSuggestion && recoResult.bestLevel !== 'ideal' && (
+                  <View style={s.idealSuggestion}>
+                    <Ionicons name="cart-outline" size={14} color={Colors.lieDeVin} />
+                    <Text style={s.idealSuggestionText}>{recoResult.idealSuggestion}</Text>
                   </View>
                 )}
 
@@ -392,9 +408,9 @@ export default function DiscoverScreen() {
 // ── Composants ──
 
 const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
-  const matchColor = rec.match === 'parfait' ? Colors.vertSauge : rec.match === 'bon' ? Colors.ambreChaud : Colors.brunClair;
-  const matchBg    = rec.match === 'parfait' ? Colors.vertSaugeLight : rec.match === 'bon' ? Colors.blancDoreLight : Colors.cremeIvoire;
-  const matchLabel = rec.match === 'parfait' ? 'Accord parfait' : rec.match === 'bon' ? 'Bon accord' : 'Accord possible';
+  const matchColor = rec.match === 'ideal' ? Colors.vertSauge : rec.match === 'bon' ? Colors.ambreChaud : Colors.brunClair;
+  const matchBg    = rec.match === 'ideal' ? Colors.vertSaugeLight : rec.match === 'bon' ? Colors.blancDoreLight : Colors.cremeIvoire;
+  const matchLabel = rec.match === 'ideal' ? 'Accord idéal' : rec.match === 'bon' ? 'Bon accord' : 'Accord possible';
 
   return (
     <View style={rc.card}>
@@ -423,6 +439,12 @@ const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
                 <Text style={rc.factorText}>{f}</Text>
               </View>
             ))}
+          </View>
+        )}
+        {rec.caveat && (
+          <View style={rc.caveat}>
+            <Ionicons name="information-circle-outline" size={12} color={Colors.ambreChaud} />
+            <Text style={rc.caveatText}>{rec.caveat}</Text>
           </View>
         )}
       </View>
@@ -492,7 +514,14 @@ const s = StyleSheet.create({
   searchBtn: { backgroundColor: Colors.lieDeVin, borderRadius: Radius.lg, width: 48, alignItems: 'center', justifyContent: 'center' },
   profileBadge: { backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.sm, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.blancDore + '40' },
   profileText: { fontSize: 13, color: Colors.ambreChaud },
-  resultsTitle: { fontSize: 13, color: Colors.brunMoyen, marginBottom: Spacing.md, fontWeight: '600' },
+  resultsTitle:       { fontSize: 13, color: Colors.brunMoyen, marginBottom: Spacing.md, fontWeight: '600' },
+  messageBox:         { borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderLeftWidth: 3 },
+  messageIdeal:       { backgroundColor: Colors.vertSaugeLight, borderLeftColor: Colors.vertSauge },
+  messageBon:         { backgroundColor: Colors.blancDoreLight, borderLeftColor: Colors.ambreChaud },
+  messageAucun:       { backgroundColor: Colors.cremeIvoire, borderLeftColor: Colors.brunClair },
+  messageText:        { fontSize: 13, color: Colors.brunMoyen, lineHeight: 18 },
+  idealSuggestion:    { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin },
+  idealSuggestionText:{ fontSize: 12, color: Colors.lieDeVin, flex: 1, lineHeight: 17 },
   emptyAccord: { alignItems: 'center', paddingTop: Spacing.xxxl, gap: Spacing.md },
   emptyAccordIcon: { fontSize: 52 },
   emptyAccordTitle: { fontSize: 18, fontWeight: '700', color: Colors.brunMoyen },
@@ -528,6 +557,8 @@ const rc = StyleSheet.create({
   factors:    { gap: 3 },
   factor:     { flexDirection: 'row', alignItems: 'center', gap: 4 },
   factorText: { fontSize: 11, color: Colors.vertSauge, fontWeight: '600' },
+  caveat:     { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 4 },
+  caveatText: { fontSize: 11, color: Colors.ambreChaud, lineHeight: 15, flex: 1 },
   scoreCol:   { alignItems: 'center', justifyContent: 'center', paddingLeft: Spacing.sm },
   score:      { fontSize: 22, fontWeight: '900', color: Colors.lieDeVin },
   scoreLabel: { fontSize: 10, color: Colors.brunClair, fontWeight: '600' },

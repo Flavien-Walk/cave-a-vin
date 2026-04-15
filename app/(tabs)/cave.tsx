@@ -7,8 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Typography } from '../../src/constants';
-import { CAVES, CAVE_NAMES, COULEURS_VIN } from '../../src/constants';
-import { useBottleStore, useUIStore } from '../../src/stores';
+import { COULEURS_VIN } from '../../src/constants';
+import { useBottleStore, useUIStore, useCavesStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { filterAndSortBottles } from '../../src/utils/bottle.utils';
@@ -25,6 +25,7 @@ const SORT_OPTIONS = [
 export default function CaveScreen() {
   const { bottles, isLoading, fetchBottles } = useBottleStore();
   const { caveView, activeFilters, searchQuery, sortBy, setCaveView, setFilter, clearFilters, setSearchQuery, setSortBy } = useUIStore();
+  const { caves } = useCavesStore();
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => { fetchBottles(); }, []);
@@ -108,7 +109,7 @@ export default function CaveScreen() {
               ))}
 
               {/* Cave */}
-              {CAVE_NAMES.map(cave => (
+              {caves.map(c => c.name).map(cave => (
                 <TouchableOpacity
                   key={cave}
                   style={[styles.chip, activeFilters.cave === cave && styles.chipActive]}
