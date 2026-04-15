@@ -54,11 +54,11 @@ export default function DashboardScreen() {
         {/* Stats compactes */}
         {!isStatsLoading && stats && (
           <View style={s.statsCard}>
-            <StatCell value={stats.totalBottles.toLocaleString('fr-FR')} label="bouteilles" />
+            <StatCell value={stats.totalBottles.toLocaleString('fr-FR')} label="bouteilles" onPress={() => router.push('/(tabs)/cave')} />
             <View style={s.sep} />
             <StatCell value={stats.totalReferences.toString()} label="références" />
             <View style={s.sep} />
-            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold />
+            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => router.push('/(tabs)/stats' as any)} />
           </View>
         )}
 
@@ -119,10 +119,15 @@ export default function DashboardScreen() {
                 <Text style={s.suggestionSub}>{suggestion.bottle.annee} · {suggestion.bottle.cave}</Text>
               )}
             </View>
-            <View style={s.suggestionRight}>
-              <Text style={s.suggestionScore}>{suggestion.score}</Text>
-              <Text style={s.suggestionScoreLabel}>/ 100</Text>
-            </View>
+            {(() => {
+              const userNote = suggestion.bottle.notePerso?.note ?? suggestion.bottle.averageNote ?? null;
+              return userNote ? (
+                <View style={s.suggestionRight}>
+                  <Ionicons name="star" size={18} color={Colors.ambreChaud} />
+                  <Text style={s.suggestionScore}>{userNote % 1 === 0 ? userNote : userNote.toFixed(1)}</Text>
+                </View>
+              ) : null;
+            })()}
           </TouchableOpacity>
         )}
 
@@ -172,12 +177,15 @@ export default function DashboardScreen() {
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
 
-const StatCell = ({ value, label, gold }: { value: string; label: string; gold?: boolean }) => (
-  <View style={s.statCell}>
+const StatCell = ({ value, label, gold, onPress }: { value: string; label: string; gold?: boolean; onPress?: () => void }) => {
+  const Wrapper = onPress ? TouchableOpacity : View;
+  return (
+  <Wrapper style={s.statCell} onPress={onPress} activeOpacity={0.7}>
     <Text style={[s.statValue, gold && { color: Colors.ambreChaud }]}>{value}</Text>
     <Text style={s.statLabel}>{label}</Text>
-  </View>
-);
+  </Wrapper>
+  );
+};
 
 const Section = ({ title, icon, onMore, children }: { title: string; icon: any; onMore?: () => void; children: React.ReactNode }) => (
   <View style={s.section}>
@@ -263,9 +271,8 @@ const s = StyleSheet.create({
   suggestionBadgeText:  { fontSize: 9, fontWeight: '800', color: Colors.white, letterSpacing: 1 },
   suggestionName:       { fontSize: 16, fontWeight: '700', color: Colors.brunMoka },
   suggestionSub:        { fontSize: 12, color: Colors.brunMoyen },
-  suggestionRight:      { alignItems: 'center', paddingLeft: Spacing.md },
-  suggestionScore:      { fontSize: 28, fontWeight: '800', color: Colors.lieDeVin },
-  suggestionScoreLabel: { fontSize: 10, color: Colors.brunClair },
+  suggestionRight:      { alignItems: 'center', paddingLeft: Spacing.md, gap: 2 },
+  suggestionScore:      { fontSize: 22, fontWeight: '800', color: Colors.ambreChaud },
 
   empty:      { alignItems: 'center', paddingVertical: Spacing.xxxl * 2, gap: Spacing.md },
   emptyIcon:  { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },

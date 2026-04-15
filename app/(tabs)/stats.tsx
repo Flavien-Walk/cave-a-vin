@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
-import { useBottleStore } from '../../src/stores';
+import { useBottleStore, useUIStore } from '../../src/stores';
 import { getWineColorHex, formatPrice } from '../../src/utils/bottle.utils';
 import { router } from 'expo-router';
 
@@ -14,7 +14,14 @@ const WINE_LABELS: Record<string, string> = {
 
 export default function StatsScreen() {
   const { stats, isStatsLoading, fetchStats } = useBottleStore();
+  const { setFilter, clearFilters } = useUIStore();
   useEffect(() => { fetchStats(); }, []);
+
+  const goToFiltered = (filter: 'favoritesOnly' | 'urgentOnly') => {
+    clearFilters();
+    setFilter(filter, true);
+    router.push('/(tabs)/cave');
+  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -67,8 +74,10 @@ export default function StatsScreen() {
             </View>
 
             <View style={s.kpiRow}>
-              <KpiCard icon="heart" value={stats.favorites} label="Favoris" color={Colors.rosePale} />
-              <KpiCard icon="time-outline" value={stats.urgent} label="À boire" color={Colors.rougeAlerte} />
+              <KpiCard icon="heart" value={stats.favorites} label="Favoris" color={Colors.rosePale}
+                onPress={stats.favorites > 0 ? () => goToFiltered('favoritesOnly') : undefined} />
+              <KpiCard icon="time-outline" value={stats.urgent} label="À boire" color={Colors.rougeAlerte}
+                onPress={stats.urgent > 0 ? () => goToFiltered('urgentOnly') : undefined} />
               <KpiCard icon="checkmark-circle-outline" value={stats.consumed?.total ?? 0} label="Consommées" color={Colors.vertSauge} />
             </View>
 
@@ -153,11 +162,12 @@ export default function StatsScreen() {
 
 // ── Subcomponents ──────────────────────────────────────────────────────────────
 
-function KpiCard({ icon, value, label, sub, color, large }: {
-  icon: any; value: string | number; label: string; sub?: string; color: string; large?: boolean;
+function KpiCard({ icon, value, label, sub, color, large, onPress }: {
+  icon: any; value: string | number; label: string; sub?: string; color: string; large?: boolean; onPress?: () => void;
 }) {
+  const Wrapper = onPress ? TouchableOpacity : View;
   return (
-    <View style={[kpi.card, large && kpi.cardLarge, { borderColor: color + '25' }]}>
+    <Wrapper style={[kpi.card, large && kpi.cardLarge, { borderColor: color + '25' }]} onPress={onPress} activeOpacity={0.75}>
       <View style={[kpi.iconBox, { backgroundColor: color + '15' }]}>
         <Ionicons name={icon} size={large ? 22 : 18} color={color} />
       </View>
@@ -166,7 +176,7 @@ function KpiCard({ icon, value, label, sub, color, large }: {
       </Text>
       <Text style={kpi.label}>{label}</Text>
       {sub ? <Text style={kpi.sub}>{sub}</Text> : null}
-    </View>
+    </Wrapper>
   );
 }
 

@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, Modal, ActivityIndicator,
+  Alert, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +21,7 @@ const OCCASIONS = ['Repas du soir', 'Repas en famille', 'Repas romantique', 'Ap�
 export default function BottleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { bottles, toggleFavorite, drinkBottle, addNote, deleteNote, deleteBottle } = useBottleStore();
+  const insets = useSafeAreaInsets();
 
   const [bottle, setBottle]   = useState<Bottle | null>(bottles.find(b => b._id === id) ?? null);
   const [history, setHistory] = useState<ConsumptionEntry[]>([]);
@@ -264,7 +265,7 @@ export default function BottleDetailScreen() {
       </ScrollView>
 
       {/* ── Actions sticky ── */}
-      <View style={styles.stickyBar}>
+      <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
         <Button
           label="Consommer"
           onPress={() => setShowDrink(true)}
@@ -339,12 +340,21 @@ export default function BottleDetailScreen() {
       </Modal>
 
       {/* ── Modal Ajouter note ── */}
-      <Modal visible={showNote} transparent animationType="slide">
-        <View style={styles.overlay}>
-          <View style={styles.modalCard}>
+      <Modal visible={showNote} transparent animationType="slide" statusBarTranslucent>
+        <KeyboardAvoidingView style={styles.overlaySheet} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <TouchableOpacity style={styles.overlayDismiss} activeOpacity={1} onPress={() => setShowNote(false)} />
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom + Spacing.md, Spacing.xl) }]}>
+            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Ajouter une note</Text>
             <Text style={styles.modalLabel}>Note *</Text>
-            <StarRating value={noteValue} onChange={setNoteValue} size={36} />
+            <View style={styles.starRow}>
+              <StarRating value={noteValue} onChange={setNoteValue} size={40} />
+              {noteValue > 0 && (
+                <Text style={styles.ratingLabel}>
+                  {['', 'Décevant', 'Passable', 'Bien', 'Très bien', 'Exceptionnel'][noteValue]}
+                </Text>
+              )}
+            </View>
             <Input label="Commentaire" placeholder="Arômes, texture, accord…" value={noteTexte} onChangeText={setNoteTexte} multiline numberOfLines={3} style={{ marginTop: Spacing.md }} />
             <Input label="Occasion" placeholder="ex : Repas de famille, apéritif…" value={noteOccasion} onChangeText={setNoteOccasion} />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: Spacing.lg }}>
@@ -352,7 +362,7 @@ export default function BottleDetailScreen() {
               <Button label="Enregistrer" onPress={handleAddNote} loading={noteLoading} style={{ flex: 2 }} />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -422,7 +432,10 @@ const styles = StyleSheet.create({
 
   stickyBar: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, paddingBottom: Spacing.xl, backgroundColor: Colors.cremeIvoire, borderTopWidth: 1, borderTopColor: Colors.champagne },
 
-  overlay:    { flex: 1, backgroundColor: Colors.overlay },
+  overlay:        { flex: 1, backgroundColor: Colors.overlay },
+  overlaySheet:   { flex: 1, justifyContent: 'flex-end', backgroundColor: Colors.overlay },
+  overlayDismiss: { flex: 1 },
+  modalHandle:    { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.parchemin, alignSelf: 'center', marginBottom: Spacing.lg },
   modalCard:  { backgroundColor: Colors.cremeIvoire, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.xl, paddingBottom: 40 },
   modalTitle: { ...Typography.h3, textAlign: 'center', marginBottom: 4 },
   modalSub:   { ...Typography.bodySmall, color: Colors.brunMoyen, textAlign: 'center', marginBottom: Spacing.xl, fontStyle: 'italic' },
