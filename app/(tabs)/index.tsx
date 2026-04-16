@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,6 @@ import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants
 import { useBottleStore, useAuthStore, useCavesStore, useUIStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
-import { getRecommendations } from '../../src/utils/recommendation';
 import ANECDOTES from '../../data/anecdotes';
 
 const TODAY  = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -17,7 +16,7 @@ export default function DashboardScreen() {
   const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
   const { user } = useAuthStore();
   const { caves, activeCave, fetchCaves, setActiveCave } = useCavesStore();
-  const { clearFilters, setSortBy } = useUIStore();
+  const { clearFilters } = useUIStore();
 
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
 
@@ -25,12 +24,6 @@ export default function DashboardScreen() {
   const recent      = useMemo(() => [...bottles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottles]);
   const urgentList  = useMemo(() => bottles.filter(b => isUrgent(b) && b.quantite > 0), [bottles]);
   const lowStock    = useMemo(() => bottles.filter(b => b.quantite === 1 && !isUrgent(b)), [bottles]);
-
-  // Suggestion "Ce soir" — top 1 accord avec viande rouge (plat polyvalent)
-  const suggestion  = useMemo(() => {
-    const result = getRecommendations(bottles, 'boeuf');
-    return result.wines.length > 0 ? result.wines[0] : null;
-  }, [bottles]);
 
   const firstName = user?.name?.split(' ')[0] ?? 'vous';
 
@@ -59,7 +52,7 @@ export default function DashboardScreen() {
             <View style={s.sep} />
             <StatCell value={stats.totalReferences.toString()} label="références" onPress={() => router.push('/(tabs)/cave')} />
             <View style={s.sep} />
-            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => { clearFilters(); setSortBy('prix'); router.push('/(tabs)/cave'); }} />
+            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => { clearFilters(); router.push({ pathname: '/(tabs)/cave', params: { initSort: 'prix' } } as any); }} />
           </View>
         )}
 
@@ -102,34 +95,6 @@ export default function DashboardScreen() {
             <Ionicons name="alert-circle-outline" size={14} color={Colors.ambreChaud} />
             <Text style={s.alertInfoText}>{lowStock.length} bouteille{lowStock.length > 1 ? 's' : ''} en dernière unité</Text>
           </View>
-        )}
-
-        {/* Suggestion "Ce soir" */}
-        {suggestion && (
-          <TouchableOpacity
-            style={s.suggestionCard}
-            onPress={() => router.push(('/bottle/' + suggestion.bottle._id) as any)}
-            activeOpacity={0.85}
-          >
-            <View style={s.suggestionLeft}>
-              <View style={s.suggestionBadge}>
-                <Text style={s.suggestionBadgeText}>CE SOIR</Text>
-              </View>
-              <Text style={s.suggestionName} numberOfLines={1}>{suggestion.bottle.nom}</Text>
-              {suggestion.bottle.annee && (
-                <Text style={s.suggestionSub}>{suggestion.bottle.annee} · {suggestion.bottle.cave}</Text>
-              )}
-            </View>
-            {(() => {
-              const userNote = suggestion.bottle.notePerso?.note ?? suggestion.bottle.averageNote ?? null;
-              return userNote ? (
-                <View style={s.suggestionRight}>
-                  <Ionicons name="star" size={18} color={Colors.ambreChaud} />
-                  <Text style={s.suggestionScore}>{userNote % 1 === 0 ? userNote : userNote.toFixed(1)}</Text>
-                </View>
-              ) : null;
-            })()}
-          </TouchableOpacity>
         )}
 
         {/* Cave vide */}
@@ -258,22 +223,6 @@ const s = StyleSheet.create({
     borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud,
   },
   alertInfoText: { flex: 1, fontSize: 13, fontWeight: '500', color: Colors.ambreChaud },
-
-  suggestionCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.champagne,
-    borderRadius: Radius.xl, padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-    borderWidth: 1, borderColor: Colors.parchemin,
-    ...Shadow.sm,
-  },
-  suggestionLeft:       { flex: 1, gap: 4 },
-  suggestionBadge:      { alignSelf: 'flex-start', backgroundColor: Colors.lieDeVin, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full },
-  suggestionBadgeText:  { fontSize: 9, fontWeight: '800', color: Colors.white, letterSpacing: 1 },
-  suggestionName:       { fontSize: 16, fontWeight: '700', color: Colors.brunMoka },
-  suggestionSub:        { fontSize: 12, color: Colors.brunMoyen },
-  suggestionRight:      { alignItems: 'center', paddingLeft: Spacing.md, gap: 2 },
-  suggestionScore:      { fontSize: 22, fontWeight: '800', color: Colors.ambreChaud },
 
   empty:      { alignItems: 'center', paddingVertical: Spacing.xxxl * 2, gap: Spacing.md },
   emptyIcon:  { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },

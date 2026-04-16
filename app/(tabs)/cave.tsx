@@ -4,7 +4,7 @@ import {
   TouchableOpacity, RefreshControl, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Typography } from '../../src/constants';
 import { COULEURS_VIN } from '../../src/constants';
@@ -28,11 +28,15 @@ export default function CaveScreen() {
   const { caves } = useCavesStore();
   const [showFilters, setShowFilters] = useState(false);
 
+  // Tri ponctuel via param URL (ex : depuis home "Valeur") — ne pollue pas le store global
+  const { initSort } = useLocalSearchParams<{ initSort?: string }>();
+  const effectiveSortBy = (initSort as any) || sortBy;
+
   useEffect(() => { fetchBottles(); }, []);
 
   const filtered = useMemo(
-    () => filterAndSortBottles(bottles, searchQuery, activeFilters, sortBy),
-    [bottles, searchQuery, activeFilters, sortBy]
+    () => filterAndSortBottles(bottles, searchQuery, activeFilters, effectiveSortBy),
+    [bottles, searchQuery, activeFilters, effectiveSortBy]
   );
 
   const activeFilterCount = Object.values(activeFilters).filter(v => v && v !== false).length;
@@ -157,12 +161,12 @@ export default function CaveScreen() {
               {SORT_OPTIONS.map(opt => (
                 <TouchableOpacity
                   key={opt.value}
-                  style={[styles.chip, sortBy === opt.value && styles.chipSort]}
-                  onPress={() => setSortBy(opt.value as any)}
+                  style={[styles.chip, effectiveSortBy === opt.value && styles.chipSort]}
+                  onPress={() => { setSortBy(opt.value as any); router.setParams({ initSort: undefined }); }}
                   accessibilityLabel={`Trier par ${opt.label}`}
-                  accessibilityState={{ selected: sortBy === opt.value }}
+                  accessibilityState={{ selected: effectiveSortBy === opt.value }}
                 >
-                  <Text style={[styles.chipText, sortBy === opt.value && styles.chipTextSort]}>{opt.label}</Text>
+                  <Text style={[styles.chipText, effectiveSortBy === opt.value && styles.chipTextSort]}>{opt.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -175,7 +179,7 @@ export default function CaveScreen() {
         data={filtered}
         keyExtractor={b => b._id}
         renderItem={({ item }) => (
-          <BottleCard bottle={item} onPress={() => router.push(`/bottle/${item._id}`)} />
+          <BottleCard bottle={item} onPress={() => router.push(`/bottle/${item._id}`)} compact={caveView === 'grid'} />
         )}
         contentContainerStyle={[styles.list, filtered.length === 0 && { flex: 1 }]}
         numColumns={caveView === 'grid' ? 2 : 1}
