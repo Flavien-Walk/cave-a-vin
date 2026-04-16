@@ -52,7 +52,7 @@ export default function DashboardScreen() {
             <View style={s.sep} />
             <StatCell value={stats.totalReferences.toString()} label="références" onPress={() => router.push('/(tabs)/cave')} />
             <View style={s.sep} />
-            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => { clearFilters(); router.push({ pathname: '/(tabs)/cave', params: { initSort: 'prix' } } as any); }} />
+            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => router.push('/cave-value' as any)} />
           </View>
         )}
 
@@ -108,9 +108,18 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        {/* Anecdote */}
+        <View style={s.anecdote}>
+          <View style={s.anecdoteHead}>
+            <Ionicons name="bulb-outline" size={13} color={Colors.ambreChaud} />
+            <Text style={s.anecdoteLabel}>LE SAVIEZ-VOUS ?</Text>
+          </View>
+          <Text style={s.anecdoteText}>{ANECDOTE}</Text>
+        </View>
+
         {/* Favoris */}
         {favorites.length > 0 && (
-          <Section title="Favoris" icon="heart-outline" onMore={() => router.push('/(tabs)/cave')}>
+          <Section title="Favoris" icon="heart-outline" onMore={() => router.push('/cave-filtered?filter=favoritesOnly' as any)}>
             {favorites.map(b => (
               <BottleCard key={b._id} bottle={b} onPress={() => router.push(('/bottle/' + b._id) as any)} />
             ))}
@@ -125,15 +134,6 @@ export default function DashboardScreen() {
             ))}
           </Section>
         )}
-
-        {/* Anecdote */}
-        <View style={s.anecdote}>
-          <View style={s.anecdoteHead}>
-            <Ionicons name="bulb-outline" size={13} color={Colors.ambreChaud} />
-            <Text style={s.anecdoteLabel}>LE SAVIEZ-VOUS ?</Text>
-          </View>
-          <Text style={s.anecdoteText}>{ANECDOTE}</Text>
-        </View>
 
         <View style={{ height: 100 }} />
       </ScrollView>

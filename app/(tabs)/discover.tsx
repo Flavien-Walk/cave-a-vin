@@ -20,8 +20,9 @@ const TABS = ['Accords & plats', 'Mes Goûts', 'À boire bientôt', 'Wishlist'] 
 type Tab = typeof TABS[number];
 
 const SUGGESTIONS_RAPIDES = [
-  'Entrecôte', 'Saumon', 'Poulet rôti', 'Plateau fromages',
-  'Fruits de mer', 'Pâtes carbonara', 'Agneau', 'Tarte chocolat',
+  'Entrecôte', 'Saumon', 'Poulet rôti', 'Tajine agneau',
+  'Plateau fromages', 'Fruits de mer', 'Foie gras', 'Couscous',
+  'Pâtes carbonara', 'Sushi', 'Tarte chocolat', 'Apéritif',
 ];
 
 export default function DiscoverScreen() {
