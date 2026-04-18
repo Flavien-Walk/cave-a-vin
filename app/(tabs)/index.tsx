@@ -1,31 +1,56 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
 import { useBottleStore, useAuthStore, useCavesStore, useUIStore } from '../../src/stores';
+import { useSiteStore } from '../../src/stores/siteStore';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
+import { SITE_DEFINITIONS, getSiteCaveNames, type SiteName } from '../../src/constants/sites';
 import ANECDOTES from '../../data/anecdotes';
 
-const TODAY  = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+const TODAY    = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 const ANECDOTE = ANECDOTES[Math.floor(Math.random() * ANECDOTES.length)];
 
 export default function DashboardScreen() {
   const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
   const { user } = useAuthStore();
   const { caves, activeCave, fetchCaves, setActiveCave } = useCavesStore();
+  const { activeSite, setActiveSite } = useSiteStore();
   const { clearFilters } = useUIStore();
 
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
 
-  const favorites   = useMemo(() => bottles.filter(b => b.isFavorite).slice(0, 3), [bottles]);
-  const recent      = useMemo(() => [...bottles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottles]);
-  const urgentList  = useMemo(() => bottles.filter(b => isUrgent(b) && b.quantite > 0), [bottles]);
-  const lowStock    = useMemo(() => bottles.filter(b => b.quantite === 1 && !isUrgent(b)), [bottles]);
+  // Caves du site actif
+  const siteCaves = useMemo(() => {
+    const names = getSiteCaveNames(activeSite);
+    const byLocation = caves.filter(c => c.location === activeSite);
+    const byName     = caves.filter(c => names.includes(c.name));
+    // Préférer le filtre par location, sinon par nom (rétrocompat)
+    return byLocation.length > 0 ? byLocation : byName;
+  }, [caves, activeSite]);
 
-  const firstName = user?.name?.split(' ')[0] ?? 'vous';
+  // Changer de site : met aussi à jour la cave active
+  const handleSwitchSite = useCallback((site: SiteName) => {
+    setActiveSite(site);
+    const names = getSiteCaveNames(site);
+    const byLocation = caves.filter(c => c.location === site);
+    const byName     = caves.filter(c => names.includes(c.name));
+    const newCaves   = byLocation.length > 0 ? byLocation : byName;
+    const newActive  = newCaves[0] ?? null;
+    if (newActive) setActiveCave(newActive);
+  }, [caves, setActiveSite, setActiveCave]);
+
+  const favorites  = useMemo(() => bottles.filter(b => b.isFavorite).slice(0, 3), [bottles]);
+  const recent     = useMemo(() => [...bottles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottles]);
+  const urgentList = useMemo(() => bottles.filter(b => isUrgent(b) && b.quantite > 0), [bottles]);
+  const lowStock   = useMemo(() => bottles.filter(b => b.quantite === 1 && !isUrgent(b)), [bottles]);
+
+  const firstName       = user?.name?.split(' ')[0] ?? 'vous';
+  const isMarseillan    = activeSite === 'Marseillan';
+  const showCavePicker  = siteCaves.length > 1; // Marseillan = 1 cave → pas de sélecteur
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -34,7 +59,7 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => { fetchBottles(); fetchStats(); }} tintColor={Colors.lieDeVin} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* En-tête */}
+        {/* ── En-tête ── */}
         <View style={s.header}>
           <View>
             <Text style={s.date}>{TODAY.charAt(0).toUpperCase() + TODAY.slice(1)}</Text>
@@ -45,7 +70,30 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Stats compactes */}
+        {/* ── Site switcher (Lyon / Marseillan) ── */}
+        <View style={s.siteRow}>
+          {SITE_DEFINITIONS.map(site => {
+            const isActive = activeSite === site.name;
+            return (
+              <TouchableOpacity
+                key={site.name}
+                style={[s.sitePill, isActive && s.sitePillActive]}
+                onPress={() => handleSwitchSite(site.name)}
+                activeOpacity={0.75}
+              >
+                <Text style={s.siteEmoji}>{site.emoji}</Text>
+                <Text style={[s.siteLabel, isActive && s.siteLabelActive]}>{site.label}</Text>
+                {isActive && <View style={s.siteActiveDot} />}
+              </TouchableOpacity>
+            );
+          })}
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity style={s.caveManageBtn} onPress={() => router.push('/manage-caves' as any)}>
+            <Ionicons name="settings-outline" size={16} color={Colors.brunMoyen} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Stats compactes ── */}
         {!isStatsLoading && stats && (
           <View style={s.statsCard}>
             <StatCell value={stats.totalBottles.toLocaleString('fr-FR')} label="bouteilles" onPress={() => router.push('/(tabs)/cave')} />
@@ -56,12 +104,12 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Sélecteur de cave */}
-        {caves.length > 0 && (
+        {/* ── Sélecteur de cave (affiché seulement si le site a plusieurs caves) ── */}
+        {showCavePicker && (
           <View style={s.caveRow}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm }}>
-                {caves.map(c => (
+                {siteCaves.map(c => (
                   <TouchableOpacity
                     key={c._id}
                     style={[s.cavePill, activeCave?._id === c._id && s.cavePillActive]}
@@ -74,13 +122,18 @@ export default function DashboardScreen() {
                 ))}
               </View>
             </ScrollView>
-            <TouchableOpacity style={s.caveManageBtn} onPress={() => router.push('/manage-caves' as any)}>
-              <Ionicons name="settings-outline" size={16} color={Colors.brunMoyen} />
-            </TouchableOpacity>
           </View>
         )}
 
-        {/* Alertes urgence */}
+        {/* ── Badge site Marseillan (quand pas de sélecteur de cave) ── */}
+        {isMarseillan && !showCavePicker && (
+          <View style={s.marseillanBadge}>
+            <Text style={s.marseillanEmoji}>🌊</Text>
+            <Text style={s.marseillanText}>Cave Marseillan</Text>
+          </View>
+        )}
+
+        {/* ── Alertes urgence ── */}
         {urgentList.length > 0 && (
           <TouchableOpacity style={s.alert} onPress={() => router.push('/(tabs)/discover')} activeOpacity={0.8}>
             <View style={s.alertDot} />
@@ -89,7 +142,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Stock faible */}
+        {/* ── Stock faible ── */}
         {lowStock.length > 0 && (
           <View style={s.alertInfo}>
             <Ionicons name="alert-circle-outline" size={14} color={Colors.ambreChaud} />
@@ -97,7 +150,7 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Cave vide */}
+        {/* ── Cave vide ── */}
         {!isLoading && bottles.length === 0 && (
           <View style={s.empty}>
             <View style={s.emptyIcon}>
@@ -108,7 +161,7 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Anecdote */}
+        {/* ── Anecdote ── */}
         <View style={s.anecdote}>
           <View style={s.anecdoteHead}>
             <Ionicons name="bulb-outline" size={13} color={Colors.ambreChaud} />
@@ -117,7 +170,7 @@ export default function DashboardScreen() {
           <Text style={s.anecdoteText}>{ANECDOTE}</Text>
         </View>
 
-        {/* Favoris */}
+        {/* ── Favoris ── */}
         {favorites.length > 0 && (
           <Section title="Favoris" icon="heart-outline" onMore={() => router.push('/cave-filtered?filter=favoritesOnly' as any)}>
             {favorites.map(b => (
@@ -126,7 +179,7 @@ export default function DashboardScreen() {
           </Section>
         )}
 
-        {/* Ajouts récents */}
+        {/* ── Ajouts récents ── */}
         {recent.length > 0 && (
           <Section title="Ajouts récents" icon="time-outline" onMore={() => router.push('/(tabs)/cave')}>
             {recent.map(b => (
@@ -146,10 +199,10 @@ export default function DashboardScreen() {
 const StatCell = ({ value, label, gold, onPress }: { value: string; label: string; gold?: boolean; onPress?: () => void }) => {
   const Wrapper = onPress ? TouchableOpacity : View;
   return (
-  <Wrapper style={s.statCell} onPress={onPress} activeOpacity={0.7}>
-    <Text style={[s.statValue, gold && { color: Colors.ambreChaud }]}>{value}</Text>
-    <Text style={s.statLabel}>{label}</Text>
-  </Wrapper>
+    <Wrapper style={s.statCell} onPress={onPress} activeOpacity={0.7}>
+      <Text style={[s.statValue, gold && { color: Colors.ambreChaud }]}>{value}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+    </Wrapper>
   );
 };
 
@@ -176,22 +229,44 @@ const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.cremeIvoire },
   scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
 
-  header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.lg },
+  header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
   date:          { fontSize: 12, color: Colors.brunClair, textTransform: 'capitalize', letterSpacing: 0.3 },
   appName:       { fontSize: 22, fontWeight: '800', color: Colors.brunMoka, letterSpacing: -0.3, marginTop: 2 },
-  avatarBtn:     {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Colors.lieDeVin,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  avatarBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.lieDeVin, alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { fontSize: 16, fontWeight: '700', color: Colors.white },
+
+  // Site switcher
+  siteRow: {
+    flexDirection: 'row', alignItems: 'center',
+    marginBottom: Spacing.md, gap: Spacing.sm,
+  },
+  sitePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: Spacing.md, paddingVertical: 9,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.champagne,
+    borderWidth: 1.5, borderColor: Colors.parchemin,
+  },
+  sitePillActive: {
+    backgroundColor: Colors.lieDeVin,
+    borderColor: Colors.lieDeVin,
+    ...Shadow.sm,
+  },
+  siteEmoji: { fontSize: 14 },
+  siteLabel: { fontSize: 14, fontWeight: '700', color: Colors.lieDeVin },
+  siteLabelActive: { color: Colors.white },
+  siteActiveDot: {
+    width: 5, height: 5, borderRadius: 3,
+    backgroundColor: Colors.ambreChaud,
+    marginLeft: 2,
+  },
+  caveManageBtn: { padding: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
 
   statsCard: {
     flexDirection: 'row',
     backgroundColor: Colors.lieDeVin,
     borderRadius: Radius.xl,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md,
     marginBottom: Spacing.md,
     ...Shadow.sm,
   },
@@ -200,12 +275,23 @@ const s = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: '800', color: Colors.white },
   statLabel: { fontSize: 10, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
 
+  // Sélecteur de cave (Lyon uniquement)
   caveRow:          { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
   cavePill:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
   cavePillActive:   { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
   cavePillText:     { fontSize: 13, fontWeight: '600', color: Colors.lieDeVin },
   cavePillTextActive:{ color: Colors.white },
-  caveManageBtn:    { padding: 6, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
+
+  // Badge Marseillan
+  marseillanBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.champagne, borderRadius: Radius.md,
+    padding: Spacing.md, marginBottom: Spacing.md,
+    borderWidth: 1, borderColor: Colors.parchemin,
+    borderLeftWidth: 3, borderLeftColor: Colors.lieDeVin,
+  },
+  marseillanEmoji: { fontSize: 16 },
+  marseillanText:  { fontSize: 13, fontWeight: '600', color: Colors.brunMoyen },
 
   alert: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,

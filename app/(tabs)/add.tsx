@@ -177,7 +177,9 @@ export default function AddScreen() {
       const q = parseInt(quantite);
       if (isNaN(q) || q < 1) { Alert.alert('Quantité invalide'); return false; }
     }
-    if (step === 2 && (!cave || !emplacement)) { Alert.alert('Cave et emplacement obligatoires'); return false; }
+    if (step === 2 && !cave) { Alert.alert('Cave obligatoire'); return false; }
+    // L'emplacement est obligatoire seulement si la cave en propose
+    if (step === 2 && emplacementOptions.length > 0 && !emplacement) { Alert.alert('Emplacement obligatoire pour cette cave'); return false; }
     return true;
   };
 
@@ -309,7 +311,10 @@ export default function AddScreen() {
           {step === 2 && (
             <>
               <SelectModal label="Cave" value={cave} options={caveOptions} onChange={v => { setCave(v); setEmplacement(''); }} placeholder="Choisir une cave" required />
-              <SelectModal label="Emplacement" value={emplacement} options={emplacementOptions} onChange={setEmplacement} placeholder={cave ? 'Choisir un emplacement' : 'Sélectionnez d\'abord une cave'} required />
+              {/* L'emplacement n'est affiché que si la cave en possède (ex : pas pour Marseillan) */}
+              {emplacementOptions.length > 0 && (
+                <SelectModal label="Emplacement" value={emplacement} options={emplacementOptions} onChange={setEmplacement} placeholder="Choisir un emplacement" required />
+              )}
             </>
           )}
 
