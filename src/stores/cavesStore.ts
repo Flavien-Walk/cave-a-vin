@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { cavesApi } from '../api/caves.api';
 import type { UserCave, CreateCaveDto } from '../api/caves.api';
-import { SITE_DEFINITIONS } from '../constants/sites';
 
 interface CavesState {
   caves: UserCave[];
@@ -16,8 +15,6 @@ interface CavesState {
   setActiveCave: (cave: UserCave) => void;
   setDefault: (id: string) => Promise<void>;
   clearError: () => void;
-  /** Crée les caves Lyon + Marseillan manquantes au premier lancement */
-  initializeSites: () => Promise<void>;
 }
 
 export const useCavesStore = create<CavesState>((set, get) => ({
@@ -80,43 +77,4 @@ export const useCavesStore = create<CavesState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
-
-  initializeSites: async () => {
-    const { caves, createCave, fetchCaves } = get();
-    let created = false;
-
-    for (const site of SITE_DEFINITIONS) {
-      for (const caveDef of site.caves) {
-        // Cherche par nom (indépendamment de la location, pour éviter les doublons)
-        const exists = caves.some(c => c.name === caveDef.name);
-        if (!exists) {
-          try {
-            await createCave({
-              name: caveDef.name,
-              location: caveDef.location,
-              emplacements: caveDef.emplacements,
-            });
-            created = true;
-          } catch {
-            // Ignore erreurs individuelles (connexion, etc.)
-          }
-        }
-      }
-    }
-
-    if (created) {
-      // Recharger pour avoir les IDs frais
-      await fetchCaves();
-    }
-
-    // S'assurer que Cave 1 (Lyon) est active par défaut
-    const updated = get();
-    if (!updated.activeCave || updated.activeCave.location === undefined) {
-      const cave1 = updated.caves.find(c => c.name === 'Cave 1')
-        ?? updated.caves.find(c => c.location === 'Lyon')
-        ?? updated.caves[0]
-        ?? null;
-      if (cave1) set({ activeCave: cave1 });
-    }
-  },
 }));
