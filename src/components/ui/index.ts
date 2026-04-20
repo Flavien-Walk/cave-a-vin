@@ -5,3 +5,5 @@ export type { SelectOption } from './SelectModal';
 export { WineBadge, QuantityBadge, TextBadge } from './Badge';
 export { StarRating }   from './StarRating';
 export { EmptyState }   from './EmptyState';
+export { LieuSegmentedControl } from './LieuSegmentedControl';
+export type { LieuEntry } from './LieuSegmentedControl';

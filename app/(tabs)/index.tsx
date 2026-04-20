@@ -6,45 +6,69 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../src/constants';
 import { useBottleStore, useAuthStore, useCavesStore, useUIStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
+import { LieuSegmentedControl } from '../../src/components/ui';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
 import ANECDOTES from '../../data/anecdotes';
 
 const TODAY    = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 const ANECDOTE = ANECDOTES[Math.floor(Math.random() * ANECDOTES.length)];
 
-type LieuEntry = { lieu: string; nbCaves: number; nbBottles: number };
-
 export default function DashboardScreen() {
-  const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
+  const { bottles, isLoading, fetchBottles } = useBottleStore();
   const { user } = useAuthStore();
   const { caves, activeLieu, fetchCaves, setActiveLieu } = useCavesStore();
   const { setFilter } = useUIStore();
 
-  useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
+  useEffect(() => { fetchBottles(); fetchCaves(); }, []);
 
-  // Lieux réels de l'utilisateur (dérivés des caves)
-  const lieuEntries = useMemo<LieuEntry[]>(() => {
+  // ── Lieux disponibles ──
+  const lieuEntries = useMemo(() => {
     const lieus = [...new Set(caves.map(c => c.location).filter(Boolean))] as string[];
     return lieus.map(lieu => {
-      const cavesInLieu = caves.filter(c => c.location === lieu);
-      const caveNames   = cavesInLieu.map(c => c.name);
-      const nbBottles   = bottles.filter(b => caveNames.includes(b.cave ?? '')).length;
-      return { lieu, nbCaves: cavesInLieu.length, nbBottles };
+      const caveNames = caves.filter(c => c.location === lieu).map(c => c.name);
+      const nbBottles = bottles.filter(b => caveNames.includes(b.cave ?? '')).length;
+      return { lieu, nbBottles };
     });
   }, [caves, bottles]);
 
-  const favorites  = useMemo(() => bottles.filter(b => b.isFavorite).slice(0, 3), [bottles]);
-  const recent     = useMemo(() => [...bottles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottles]);
-  const urgentList = useMemo(() => bottles.filter(b => isUrgent(b) && b.quantite > 0), [bottles]);
-  const lowStock   = useMemo(() => bottles.filter(b => b.quantite === 1 && !isUrgent(b)), [bottles]);
+  // ── Bouteilles strictement filtrées par lieu actif ──
+  const bottlesInLieu = useMemo(() => {
+    if (!activeLieu) return bottles;
+    const caveNames = caves
+      .filter(c => c.location === activeLieu)
+      .map(c => c.name);
+    return bottles.filter(b => caveNames.includes(b.cave ?? ''));
+  }, [bottles, caves, activeLieu]);
+
+  // ── Stats locales (toujours cohérentes avec le lieu actif) ──
+  const localStats = useMemo(() => {
+    const totalBottles    = bottlesInLieu.reduce((s, b) => s + b.quantite, 0);
+    const totalReferences = bottlesInLieu.length;
+    const totalValue      = bottlesInLieu.reduce((s, b) => s + (b.prixAchat ?? 0) * b.quantite, 0);
+    return { totalBottles, totalReferences, totalValue };
+  }, [bottlesInLieu]);
+
+  // ── Listes dérivées — toutes issues du lieu actif uniquement ──
+  const favorites  = useMemo(() => bottlesInLieu.filter(b => b.isFavorite).slice(0, 3), [bottlesInLieu]);
+  const recent     = useMemo(
+    () => [...bottlesInLieu].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3),
+    [bottlesInLieu],
+  );
+  const urgentList = useMemo(() => bottlesInLieu.filter(b => isUrgent(b) && b.quantite > 0), [bottlesInLieu]);
+  const lowStock   = useMemo(() => bottlesInLieu.filter(b => b.quantite === 1 && !isUrgent(b)), [bottlesInLieu]);
 
   const firstName = user?.name?.split(' ')[0] ?? 'vous';
+
+  const handleLieuChange = (lieu: string) => {
+    setActiveLieu(lieu);
+    setFilter('cave', undefined);
+  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <ScrollView
         contentContainerStyle={s.scroll}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => { fetchBottles(); fetchStats(); }} tintColor={Colors.lieDeVin} />}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => { fetchBottles(); fetchCaves(); }} tintColor={Colors.lieDeVin} />}
         showsVerticalScrollIndicator={false}
       >
         {/* ── En-tête ── */}
@@ -72,66 +96,31 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Mes lieux : selector compact horizontal ── */}
-        {caves.length > 0 && (
-          <View style={s.lieuRow}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.lieuPills}
-              style={{ flex: 1 }}
-            >
-              {lieuEntries.length > 0 ? lieuEntries.map(({ lieu, nbBottles }) => {
-                const isActive = activeLieu === lieu;
-                return (
-                  <TouchableOpacity
-                    key={lieu}
-                    style={[s.lieuPill, isActive && s.lieuPillActive]}
-                    onPress={() => {
-                      setActiveLieu(lieu);
-                      setFilter('cave', undefined);
-                      router.push('/(tabs)/cave');
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="location" size={12} color={isActive ? Colors.white : Colors.lieDeVin} />
-                    <Text style={[s.lieuPillText, isActive && s.lieuPillTextActive]} numberOfLines={1}>
-                      {lieu}
-                    </Text>
-                    <View style={[s.lieuPillBadge, isActive && s.lieuPillBadgeActive]}>
-                      <Text style={[s.lieuPillBadgeText, isActive && s.lieuPillBadgeTextActive]}>
-                        {nbBottles}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }) : (
-                <TouchableOpacity
-                  style={s.lieuNone}
-                  onPress={() => router.push('/manage-caves' as any)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="add-circle-outline" size={14} color={Colors.brunClair} />
-                  <Text style={s.lieuNoneText}>Ajoutez un lieu à vos caves</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-
-            <TouchableOpacity style={s.manageBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
-              <Ionicons name="home-outline" size={13} color={Colors.lieDeVin} />
-              <Text style={s.manageBtnText}>Mes caves</Text>
-            </TouchableOpacity>
+        {/* ── Sélecteur de lieux — segmented control ── */}
+        {caves.length > 0 && lieuEntries.length > 0 && (
+          <View style={s.lieuSection}>
+            <View style={s.lieuHeader}>
+              <Text style={s.lieuLabel}>MES LIEUX</Text>
+              <TouchableOpacity onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
+                <Text style={s.manageBtnText}>Gérer</Text>
+              </TouchableOpacity>
+            </View>
+            <LieuSegmentedControl
+              entries={lieuEntries}
+              activeLieu={activeLieu}
+              onChange={handleLieuChange}
+            />
           </View>
         )}
 
-        {/* ── Stats compactes ── */}
-        {!isStatsLoading && stats && (
+        {/* ── Stats locales (lieu actif) ── */}
+        {bottlesInLieu.length > 0 && (
           <View style={s.statsCard}>
-            <StatCell value={stats.totalBottles.toLocaleString('fr-FR')} label="bouteilles" onPress={() => router.push('/(tabs)/cave')} />
+            <StatCell value={localStats.totalBottles.toLocaleString('fr-FR')} label="bouteilles" onPress={() => router.push('/(tabs)/cave')} />
             <View style={s.sep} />
-            <StatCell value={stats.totalReferences.toString()} label="références" onPress={() => router.push('/(tabs)/cave')} />
+            <StatCell value={localStats.totalReferences.toString()} label="références" onPress={() => router.push('/(tabs)/cave')} />
             <View style={s.sep} />
-            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => router.push('/cave-value' as any)} />
+            <StatCell value={formatPrice(localStats.totalValue)} label="valeur" gold onPress={() => router.push('/cave-value' as any)} />
           </View>
         )}
 
@@ -153,12 +142,14 @@ export default function DashboardScreen() {
         )}
 
         {/* ── Cave vide ── */}
-        {!isLoading && bottles.length === 0 && caves.length > 0 && (
+        {!isLoading && bottlesInLieu.length === 0 && caves.length > 0 && (
           <View style={s.empty}>
             <View style={s.emptyIcon}>
               <Ionicons name="wine-outline" size={40} color={Colors.parchemin} />
             </View>
-            <Text style={s.emptyTitle}>Cave vide</Text>
+            <Text style={s.emptyTitle}>
+              {activeLieu ? `Aucune bouteille à ${activeLieu}` : 'Cave vide'}
+            </Text>
             <Text style={s.emptyText}>Appuyez sur + pour ajouter votre première bouteille</Text>
           </View>
         )}
@@ -172,7 +163,7 @@ export default function DashboardScreen() {
           <Text style={s.anecdoteText}>{ANECDOTE}</Text>
         </View>
 
-        {/* ── Favoris ── */}
+        {/* ── Favoris (lieu actif uniquement) ── */}
         {favorites.length > 0 && (
           <Section title="Favoris" icon="heart-outline" onMore={() => router.push('/cave-filtered?filter=favoritesOnly' as any)}>
             {favorites.map(b => (
@@ -181,7 +172,7 @@ export default function DashboardScreen() {
           </Section>
         )}
 
-        {/* ── Ajouts récents ── */}
+        {/* ── Ajouts récents (lieu actif uniquement) ── */}
         {recent.length > 0 && (
           <Section title="Ajouts récents" icon="time-outline" onMore={() => router.push('/(tabs)/cave')}>
             {recent.map(b => (
@@ -195,6 +186,8 @@ export default function DashboardScreen() {
     </SafeAreaView>
   );
 }
+
+// ── Composants internes ──
 
 const StatCell = ({ value, label, gold, onPress }: { value: string; label: string; gold?: boolean; onPress?: () => void }) => {
   const Wrapper = onPress ? TouchableOpacity : View;
@@ -239,25 +232,11 @@ const s = StyleSheet.create({
   onboardingTitle: { fontSize: 15, fontWeight: '800', color: Colors.brunMoka, marginBottom: 3 },
   onboardingText:  { fontSize: 12, color: Colors.brunMoyen, lineHeight: 17 },
 
-  // Lieux — selector compact horizontal
-  lieuRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
-  lieuPills: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
-
-  lieuPill:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.parchemin },
-  lieuPillActive:{ backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin, ...Shadow.sm },
-  lieuPillText:       { fontSize: 13, fontWeight: '700', color: Colors.lieDeVin, maxWidth: 120 },
-  lieuPillTextActive: { color: Colors.white },
-
-  lieuPillBadge:          { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  lieuPillBadgeActive:    { backgroundColor: 'rgba(255,255,255,0.25)' },
-  lieuPillBadgeText:      { fontSize: 10, fontWeight: '700', color: Colors.brunMoyen },
-  lieuPillBadgeTextActive:{ color: Colors.white },
-
-  lieuNone:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
-  lieuNoneText: { fontSize: 12, color: Colors.brunClair },
-
-  manageBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.lieDeVin, flexShrink: 0 },
-  manageBtnText: { fontSize: 11, fontWeight: '700', color: Colors.lieDeVin },
+  // Lieux — segmented control section
+  lieuSection: { marginBottom: Spacing.md },
+  lieuHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
+  lieuLabel:   { fontSize: 10, fontWeight: '700', color: Colors.brunClair, letterSpacing: 1 },
+  manageBtnText: { fontSize: 12, fontWeight: '600', color: Colors.lieDeVin },
 
   // Stats
   statsCard: { flexDirection: 'row', backgroundColor: Colors.lieDeVin, borderRadius: Radius.xl, paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },
