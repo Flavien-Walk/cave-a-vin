@@ -84,7 +84,11 @@ export default function AddScreen() {
     if (activeCave && !cave) setCave(activeCave.name);
   }, [activeCave]);
 
-  const caveOptions: SelectOption[] = caves.map(c => ({ label: c.name, value: c.name }));
+  // Caves avec leur lieu en contexte (ex : "Cave 1 — Lyon")
+  const caveOptions: SelectOption[] = caves.map(c => ({
+    label: c.location ? `${c.name} — ${c.location}` : c.name,
+    value: c.name,
+  }));
   const emplacementOptions: SelectOption[] = cave
     ? (caves.find(c => c.name === cave)?.emplacements ?? []).map(e => ({ label: e, value: e }))
     : [];

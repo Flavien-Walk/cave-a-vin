@@ -34,8 +34,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={s.safe} edges={['top']}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Logo */}
@@ -61,19 +61,19 @@ export default function LoginScreen() {
               placeholder="vous@exemple.com"
             />
 
-            <View>
-              <Input
-                label="Mot de passe"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPwd}
-                autoComplete="password"
-                placeholder="••••••••"
-              />
-              <TouchableOpacity style={s.eyeBtn} onPress={() => setShowPwd(v => !v)}>
-                <Ionicons name={showPwd ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.brunClair} />
-              </TouchableOpacity>
-            </View>
+            <Input
+              label="Mot de passe"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPwd}
+              autoComplete="password"
+              placeholder="••••••••"
+              rightIcon={
+                <TouchableOpacity onPress={() => setShowPwd(v => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name={showPwd ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.brunClair} />
+                </TouchableOpacity>
+              }
+            />
 
             <TouchableOpacity
               style={[s.btn, loading && { opacity: 0.7 }]}
@@ -125,11 +125,6 @@ const s = StyleSheet.create({
   form:      { gap: Spacing.md },
   formTitle: { fontSize: 22, fontWeight: '700', color: Colors.brunMoka, marginBottom: Spacing.sm },
 
-  eyeBtn: {
-    position: 'absolute', right: 12, bottom: 12,
-    padding: 4,
-  },
-
   btn: {
     backgroundColor: Colors.lieDeVin,
     borderRadius: Radius.full,
@@ -142,7 +137,7 @@ const s = StyleSheet.create({
   forgotBtn:  { alignItems: 'center', paddingVertical: Spacing.sm, marginTop: 2 },
   forgotText: { ...Typography.bodySmall, color: Colors.brunMoyen },
 
-  footer:     { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: Spacing.xl, paddingBottom: Spacing.xl },
+  footer:     { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: Spacing.xl, paddingBottom: Spacing.xxxl },
   footerText: { ...Typography.body, color: Colors.brunMoyen },
   footerLink: { ...Typography.body, color: Colors.lieDeVin, fontWeight: '700' },
 });

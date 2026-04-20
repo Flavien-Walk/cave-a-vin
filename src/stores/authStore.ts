@@ -14,8 +14,9 @@ interface AuthState {
   token:     string | null;
   isLoading: boolean;
 
+  preRegister: (email: string) => Promise<void>;
   login:       (email: string, password: string) => Promise<void>;
-  register:    (name: string, email: string, password: string) => Promise<void>;
+  register:    (name: string, email: string, password: string, code: string) => Promise<void>;
   logout:      () => Promise<void>;
   loadSession: () => Promise<boolean>;
   updateMe:    (name?: string, password?: string) => Promise<void>;
@@ -75,6 +76,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return false;
   },
 
+  preRegister: async (email) => {
+    await apiFetch('/api/auth/pre-register', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
   login: async (email, password) => {
     const { token, user } = await apiFetch('/api/auth/login', {
       method: 'POST',
@@ -87,10 +95,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user, token });
   },
 
-  register: async (name, email, password) => {
+  register: async (name, email, password, code) => {
     const { token, user } = await apiFetch('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, code }),
     });
     await Promise.all([
       store.set(TOKEN_KEY, token),

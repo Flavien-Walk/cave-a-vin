@@ -4,12 +4,10 @@ import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import { useAuthStore } from '../src/stores';
-import { useSiteStore } from '../src/stores/siteStore';
 import { ServerWakeup } from '../src/components/ServerWakeup';
 
 export default function RootLayout() {
   const { loadSession, token } = useAuthStore();
-  const { resetToDefault } = useSiteStore();
   const [wakeupDone, setWakeupDone] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
 
@@ -43,11 +41,6 @@ export default function RootLayout() {
   // Chargement de la session en parallèle du wakeup serveur
   useEffect(() => {
     loadSession().then(() => setSessionChecked(true));
-  }, []);
-
-  // Réinitialiser le site par défaut (Lyon) à chaque nouvelle session
-  useEffect(() => {
-    resetToDefault();
   }, []);
 
   // Une fois wakeup + session chargés → rediriger vers login si pas de session
