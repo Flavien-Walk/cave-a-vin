@@ -68,12 +68,39 @@ export default function CaveScreen() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <View>
+        {/* Titre + count + lieux inline */}
+        <View style={styles.headerLeft}>
           <Text style={styles.title}>
             {activeLieu ? activeLieu : 'Mes vins'}
           </Text>
           <Text style={styles.count}>{filtered.length} bouteille{filtered.length !== 1 ? 's' : ''}</Text>
+
+          {/* Sélecteur de lieux compact — intégré dans le header */}
+          {showLieuSwitcher && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.lieuScroll}
+              contentContainerStyle={styles.lieuRow}
+            >
+              {lieus.map(lieu => {
+                const isActive = activeLieu === lieu;
+                return (
+                  <TouchableOpacity
+                    key={lieu}
+                    style={[styles.lieuChip, isActive && styles.lieuChipActive]}
+                    onPress={() => { setActiveLieu(lieu); setFilter('cave', undefined); }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="location" size={10} color={isActive ? Colors.white : Colors.lieDeVin} />
+                    <Text style={[styles.lieuChipText, isActive && styles.lieuChipTextActive]}>{lieu}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
+
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={[styles.headerBtn, activeFilterCount > 0 && styles.headerBtnActive]}
@@ -94,26 +121,6 @@ export default function CaveScreen() {
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* ── Switcher de lieux ── */}
-      {showLieuSwitcher && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.lieuScroll} contentContainerStyle={styles.lieuRow}>
-          {lieus.map(lieu => {
-            const isActive = activeLieu === lieu;
-            return (
-              <TouchableOpacity
-                key={lieu}
-                style={[styles.lieuPill, isActive && styles.lieuPillActive]}
-                onPress={() => { setActiveLieu(lieu); setFilter('cave', undefined); }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="location-outline" size={12} color={isActive ? Colors.white : Colors.lieDeVin} />
-                <Text style={[styles.lieuPillText, isActive && styles.lieuPillTextActive]}>{lieu}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
 
       {/* ── Recherche ── */}
       <View style={styles.searchRow}>
@@ -235,22 +242,23 @@ export default function CaveScreen() {
 const styles = StyleSheet.create({
   safe:  { flex: 1, backgroundColor: Colors.cremeIvoire },
 
-  header:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
-  title:           { ...Typography.h2 },
-  count:           { ...Typography.caption, color: Colors.brunMoyen, marginTop: 2 },
-  headerActions:   { flexDirection: 'row', gap: Spacing.sm },
+  header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
+  headerLeft:    { flex: 1, marginRight: Spacing.sm },
+  title:         { ...Typography.h2 },
+  count:         { ...Typography.caption, color: Colors.brunMoyen, marginTop: 2 },
+  headerActions: { flexDirection: 'row', gap: Spacing.sm, paddingTop: 4 },
   headerBtn:       { padding: Spacing.sm, backgroundColor: Colors.champagne, borderRadius: Radius.full, position: 'relative' },
   headerBtnActive: { backgroundColor: Colors.lieDeVin },
   filterBadge:     { position: 'absolute', top: -2, right: -2, backgroundColor: Colors.rougeAlerte, borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   filterBadgeText: { fontSize: 9, color: Colors.white, fontWeight: '700' },
 
-  // Lieu switcher
-  lieuScroll: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm },
-  lieuRow:    { flexDirection: 'row', gap: Spacing.sm },
-  lieuPill:   { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.parchemin },
-  lieuPillActive:     { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
-  lieuPillText:       { fontSize: 13, fontWeight: '700', color: Colors.lieDeVin },
-  lieuPillTextActive: { color: Colors.white },
+  // Lieu switcher — compact inline dans le header
+  lieuScroll: { marginTop: Spacing.sm },
+  lieuRow:    { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  lieuChip:         { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
+  lieuChipActive:   { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
+  lieuChipText:     { fontSize: 11, fontWeight: '700', color: Colors.lieDeVin },
+  lieuChipTextActive:{ color: Colors.white },
 
   searchRow:   { flexDirection: 'row', alignItems: 'center', marginHorizontal: Spacing.lg, marginBottom: Spacing.sm, backgroundColor: Colors.champagne, borderRadius: Radius.lg, paddingHorizontal: Spacing.md, borderWidth: 1.5, borderColor: Colors.parchemin, minHeight: 46 },
   searchIcon:  { marginRight: Spacing.sm },
