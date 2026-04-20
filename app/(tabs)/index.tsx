@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../src/constants';
-import { useBottleStore, useAuthStore, useCavesStore } from '../../src/stores';
+import { useBottleStore, useAuthStore, useCavesStore, useUIStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
 import ANECDOTES from '../../data/anecdotes';
@@ -17,7 +17,8 @@ type LieuEntry = { lieu: string; nbCaves: number; nbBottles: number };
 export default function DashboardScreen() {
   const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
   const { user } = useAuthStore();
-  const { caves, fetchCaves, setActiveLieu } = useCavesStore();
+  const { caves, activeLieu, fetchCaves, setActiveLieu } = useCavesStore();
+  const { setFilter } = useUIStore();
 
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
 
@@ -71,56 +72,55 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Mes lieux ── */}
+        {/* ── Mes lieux : selector compact horizontal ── */}
         {caves.length > 0 && (
-          <View style={s.lieuSection}>
-            <View style={s.lieuSectionHead}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="location-outline" size={13} color={Colors.lieDeVin} />
-                <Text style={s.lieuSectionTitle}>Mes lieux</Text>
-              </View>
-              <TouchableOpacity style={s.manageBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
-                <Ionicons name="home-outline" size={13} color={Colors.lieDeVin} />
-                <Text style={s.manageBtnText}>Mes caves</Text>
-              </TouchableOpacity>
-            </View>
-
-            {lieuEntries.length > 0 ? (
-              lieuEntries.map(({ lieu, nbCaves, nbBottles }) => (
+          <View style={s.lieuRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.lieuPills}
+              style={{ flex: 1 }}
+            >
+              {lieuEntries.length > 0 ? lieuEntries.map(({ lieu, nbBottles }) => {
+                const isActive = activeLieu === lieu;
+                return (
+                  <TouchableOpacity
+                    key={lieu}
+                    style={[s.lieuPill, isActive && s.lieuPillActive]}
+                    onPress={() => {
+                      setActiveLieu(lieu);
+                      setFilter('cave', undefined);
+                      router.push('/(tabs)/cave');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="location" size={12} color={isActive ? Colors.white : Colors.lieDeVin} />
+                    <Text style={[s.lieuPillText, isActive && s.lieuPillTextActive]} numberOfLines={1}>
+                      {lieu}
+                    </Text>
+                    <View style={[s.lieuPillBadge, isActive && s.lieuPillBadgeActive]}>
+                      <Text style={[s.lieuPillBadgeText, isActive && s.lieuPillBadgeTextActive]}>
+                        {nbBottles}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }) : (
                 <TouchableOpacity
-                  key={lieu}
-                  style={s.lieuCard}
-                  onPress={() => {
-                    setActiveLieu(lieu);
-                    router.push('/(tabs)/cave');
-                  }}
+                  style={s.lieuNone}
+                  onPress={() => router.push('/manage-caves' as any)}
                   activeOpacity={0.8}
                 >
-                  <View style={s.lieuCardIcon}>
-                    <Ionicons name="location" size={22} color={Colors.lieDeVin} />
-                  </View>
-                  <View style={s.lieuCardBody}>
-                    <Text style={s.lieuCardName}>{lieu}</Text>
-                    <Text style={s.lieuCardSub}>
-                      {nbCaves} cave{nbCaves > 1 ? 's' : ''} · {nbBottles} bouteille{nbBottles > 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.brunClair} />
+                  <Ionicons name="add-circle-outline" size={14} color={Colors.brunClair} />
+                  <Text style={s.lieuNoneText}>Ajoutez un lieu à vos caves</Text>
                 </TouchableOpacity>
-              ))
-            ) : (
-              /* Caves créées mais sans lieu défini */
-              <TouchableOpacity
-                style={s.lieuEmpty}
-                onPress={() => router.push('/manage-caves' as any)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add-circle-outline" size={18} color={Colors.brunClair} />
-                <Text style={s.lieuEmptyText}>
-                  Vos caves n'ont pas encore de lieu — ajoutez-en depuis Mes caves
-                </Text>
-              </TouchableOpacity>
-            )}
+              )}
+            </ScrollView>
+
+            <TouchableOpacity style={s.manageBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
+              <Ionicons name="home-outline" size={13} color={Colors.lieDeVin} />
+              <Text style={s.manageBtnText}>Mes caves</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -239,22 +239,25 @@ const s = StyleSheet.create({
   onboardingTitle: { fontSize: 15, fontWeight: '800', color: Colors.brunMoka, marginBottom: 3 },
   onboardingText:  { fontSize: 12, color: Colors.brunMoyen, lineHeight: 17 },
 
-  // Lieux
-  lieuSection:     { marginBottom: Spacing.md },
-  lieuSectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
-  lieuSectionTitle:{ fontSize: 14, fontWeight: '700', color: Colors.brunMoka, letterSpacing: 0.2 },
+  // Lieux — selector compact horizontal
+  lieuRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
+  lieuPills: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
 
-  manageBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.lieDeVin },
+  lieuPill:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.parchemin },
+  lieuPillActive:{ backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin, ...Shadow.sm },
+  lieuPillText:       { fontSize: 13, fontWeight: '700', color: Colors.lieDeVin, maxWidth: 120 },
+  lieuPillTextActive: { color: Colors.white },
+
+  lieuPillBadge:          { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  lieuPillBadgeActive:    { backgroundColor: 'rgba(255,255,255,0.25)' },
+  lieuPillBadgeText:      { fontSize: 10, fontWeight: '700', color: Colors.brunMoyen },
+  lieuPillBadgeTextActive:{ color: Colors.white },
+
+  lieuNone:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
+  lieuNoneText: { fontSize: 12, color: Colors.brunClair },
+
+  manageBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.lieDeVin, flexShrink: 0 },
   manageBtnText: { fontSize: 11, fontWeight: '700', color: Colors.lieDeVin },
-
-  lieuCard:     { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.parchemin, ...Shadow.sm },
-  lieuCardIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.cremeIvoire, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
-  lieuCardBody: { flex: 1 },
-  lieuCardName: { fontSize: 16, fontWeight: '700', color: Colors.brunMoka },
-  lieuCardSub:  { fontSize: 12, color: Colors.brunClair, marginTop: 2 },
-
-  lieuEmpty:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.champagne, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin },
-  lieuEmptyText: { fontSize: 12, color: Colors.brunClair, flex: 1, lineHeight: 18 },
 
   // Stats
   statsCard: { flexDirection: 'row', backgroundColor: Colors.lieDeVin, borderRadius: Radius.xl, paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },

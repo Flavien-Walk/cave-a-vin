@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Image, Animated,
+  Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
+import { Colors, Spacing, Radius } from '../../src/constants';
 import { COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../../src/constants';
 import { useBottleStore, useCavesStore } from '../../src/stores';
 import { Input, Button, SelectModal, StarRating } from '../../src/components/ui';
@@ -41,6 +41,7 @@ const formatOptions: SelectOption[]  = FORMATS_BOUTEILLE.map(f => ({ label: f.la
 export default function AddScreen() {
   const { addBottle } = useBottleStore();
   const { caves, activeCave, fetchCaves } = useCavesStore();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -273,8 +274,13 @@ export default function AddScreen() {
         </View>
       )}
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={s.form} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={s.form}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+        >
 
           {/* Étape 0 — Identité */}
           {step === 0 && (
@@ -322,12 +328,12 @@ export default function AddScreen() {
             </>
           )}
 
-          <View style={{ height: 20 }} />
+          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Actions bas */}
-      <View style={s.footer}>
+      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
         {step < 2
           ? <Button label="Continuer" onPress={handleNext} fullWidth icon={<Ionicons name="arrow-forward" size={16} color={Colors.white} />} />
           : <Button label="Ajouter à ma cave" onPress={handleSave} loading={loading} fullWidth icon={<Ionicons name="checkmark" size={16} color={Colors.white} />} />
@@ -518,7 +524,7 @@ const s = StyleSheet.create({
   photoText:    { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
 
   form:          { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
   notePersoRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
   notePersoLabel:{ fontSize: 14, fontWeight: '600', color: Colors.brunMoyen, flex: 1 },
 });
