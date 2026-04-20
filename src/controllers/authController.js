@@ -1,23 +1,65 @@
-const User      = require('../models/User');
-const { signToken } = require('../middleware/auth');
-const { sendWelcomeEmail, sendResetCodeEmail } = require('../services/emailService');
+const User                 = require('../models/User');
+const PendingVerification  = require('../models/PendingVerification');
+const { signToken }        = require('../middleware/auth');
+const { sendWelcomeEmail, sendResetCodeEmail, sendVerificationCodeEmail } = require('../services/emailService');
 
-// POST /api/auth/register
+// POST /api/auth/pre-register — envoie un code OTP avant création du compte
+exports.preRegister = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email requis.' });
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const exists = await User.findOne({ email: normalizedEmail });
+    if (exists) return res.status(409).json({ message: 'Adresse e-mail déjà utilisée.' });
+
+    const code      = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await PendingVerification.findOneAndUpdate(
+      { email: normalizedEmail },
+      { code, expiresAt },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    if (!process.env.BREVO_API_KEY) {
+      console.warn(`[pre-register] BREVO_API_KEY manquant — code pour ${normalizedEmail}: ${code}`);
+    } else {
+      await sendVerificationCodeEmail(normalizedEmail, code);
+    }
+
+    res.json({ message: 'Code de vérification envoyé.' });
+  } catch (err) { next(err); }
+};
+
+// POST /api/auth/register — crée le compte après vérification du code OTP
 exports.register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password)
-      return res.status(400).json({ message: 'Nom, email et mot de passe requis.' });
+    const { name, email, password, code } = req.body;
+    if (!name || !email || !password || !code)
+      return res.status(400).json({ message: 'Nom, email, mot de passe et code de vérification requis.' });
     if (password.length < 6)
       return res.status(400).json({ message: 'Mot de passe trop court (6 caractères min).' });
 
-    const exists = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const pending = await PendingVerification.findOne({ email: normalizedEmail });
+    if (!pending)
+      return res.status(400).json({ message: 'Aucun code envoyé pour cet email. Recommencez depuis le début.' });
+    if (pending.expiresAt < new Date())
+      return res.status(400).json({ message: 'Code expiré. Demandez-en un nouveau.' });
+    if (pending.code !== String(code).trim())
+      return res.status(400).json({ message: 'Code incorrect.' });
+
+    const exists = await User.findOne({ email: normalizedEmail });
     if (exists) return res.status(409).json({ message: 'Adresse e-mail déjà utilisée.' });
 
-    const user  = await User.create({ name, email, passwordHash: password });
+    const user  = await User.create({ name, email: normalizedEmail, passwordHash: password });
     const token = signToken(user._id);
 
-    // Email de bienvenue (non bloquant)
+    await PendingVerification.deleteOne({ email: normalizedEmail });
+
     sendWelcomeEmail(user).catch(err => console.error('[email] bienvenue:', err.message));
 
     res.status(201).json({ token, user: user.toPublic() });

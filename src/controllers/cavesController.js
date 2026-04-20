@@ -22,9 +22,9 @@ exports.create = async (req, res, next) => {
       userId: req.userId,
       name: name.trim(),
       location: location?.trim() || undefined,
-      emplacements: Array.isArray(emplacements) && emplacements.length > 0
+      emplacements: Array.isArray(emplacements)
         ? emplacements.map(e => e.trim()).filter(Boolean)
-        : ['Haut', 'Milieu', 'Bas'],
+        : [],
       isDefault: count === 0,
     });
     res.status(201).json(cave);
@@ -48,14 +48,11 @@ exports.update = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE /api/caves/:id — delete a cave (not if it's the only one)
+// DELETE /api/caves/:id — delete a cave
 exports.remove = async (req, res, next) => {
   try {
     const cave = await UserCave.findOne({ _id: req.params.id, userId: req.userId });
     if (!cave) return res.status(404).json({ message: 'Cave non trouvée' });
-
-    const count = await UserCave.countDocuments({ userId: req.userId });
-    if (count <= 1) return res.status(400).json({ message: 'Vous devez garder au moins une cave' });
 
     await cave.deleteOne();
 

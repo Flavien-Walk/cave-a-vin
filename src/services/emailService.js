@@ -184,4 +184,56 @@ function sendResetCodeEmail(user, code) {
   });
 }
 
-module.exports = { sendWelcomeEmail, sendResetCodeEmail };
+// ── Email de vérification avant inscription ───────────────────────────────────
+function sendVerificationCodeEmail(email, code) {
+  return sendEmail({
+    to:      email,
+    toName:  email,
+    subject: 'Votre code de vérification — Cave à Vin',
+    html: `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F9F5F0;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F5F0;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#FFFDF8;border-radius:16px;overflow:hidden;border:1px solid #E8DDD0;">
+        <tr>
+          <td style="background:#6B1A2A;padding:32px 40px;text-align:center;">
+            <div style="font-size:36px;margin-bottom:8px;">🍷</div>
+            <h1 style="margin:0;color:#FFFDF8;font-size:22px;font-weight:800;">Vérification de compte</h1>
+            <p style="margin:6px 0 0;color:rgba(255,253,248,0.7);font-size:14px;">Cave à Vin</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;text-align:center;">
+            <p style="margin:0 0 24px;font-size:15px;color:#6B4E3D;line-height:1.6;text-align:left;">
+              Voici votre code de vérification pour créer votre compte. Il est valable <strong>15 minutes</strong>.
+            </p>
+            <div style="background:#F9F5F0;border:2px dashed #6B1A2A40;border-radius:16px;padding:28px 24px;margin-bottom:28px;">
+              <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#8B7355;letter-spacing:1px;text-transform:uppercase;">Votre code</p>
+              <div style="font-size:42px;font-weight:800;color:#6B1A2A;letter-spacing:12px;font-family:'Courier New',monospace;">
+                ${code}
+              </div>
+            </div>
+            <p style="margin:0;font-size:13px;color:#9C8573;line-height:1.5;text-align:left;">
+              Si vous n'avez pas demandé la création d'un compte, ignorez cet email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F9F5F0;padding:20px 40px;text-align:center;border-top:1px solid #E8DDD0;">
+            <p style="margin:0;font-size:12px;color:#B5A090;">
+              © ${new Date().getFullYear()} Cave à Vin — Application mobile de gestion de cave
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  });
+}
+
+module.exports = { sendWelcomeEmail, sendResetCodeEmail, sendVerificationCodeEmail };

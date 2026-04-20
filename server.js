@@ -38,6 +38,9 @@ const start = async () => {
     await connectDB();
     app.listen(PORT, () => {
       console.log(`🍷 Cave à Vin API v2 — port ${PORT} — ${process.env.NODE_ENV || 'development'}`);
+      if (!process.env.BREVO_API_KEY) {
+        console.warn('⚠️  BREVO_API_KEY manquant — les emails de bienvenue ne seront pas envoyés');
+      }
     });
   } catch (err) {
     console.error('Startup error:', err);
