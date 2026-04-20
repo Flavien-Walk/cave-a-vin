@@ -107,9 +107,10 @@ export default function DiscoverScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header */}
+      {/* Header compact */}
       <View style={s.header}>
         <Text style={s.title}>Découvrir</Text>
+        <Text style={s.subtitle}>Accords, goûts & recommandations</Text>
       </View>
 
       {/* Tabs */}
@@ -128,26 +129,13 @@ export default function DiscoverScreen() {
       {/* ── Accords & plats ── */}
       {activeTab === 'Accords & plats' && (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-            <Text style={s.sectionTitle}>Quel plat préparez-vous ?</Text>
-
-            {/* Suggestions rapides */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
-              <View style={{ flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.lg }}>
-                {SUGGESTIONS_RAPIDES.map(s2 => (
-                  <TouchableOpacity key={s2} style={[chip.pill, plat === s2 && chip.active]} onPress={() => searchAccords(s2)}>
-                    <Text style={[chip.text, plat === s2 && chip.textActive]}>{s2}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            {/* Champ texte libre */}
+            {/* Barre de recherche */}
             <View style={s.searchRow}>
               <TextInput
                 style={s.searchInput}
-                placeholder="ex : entrecôte, poulet rôti, saumon..."
+                placeholder="ex : entrecôte, saumon, foie gras…"
                 placeholderTextColor={Colors.brunClair}
                 value={plat}
                 onChangeText={setPlat}
@@ -160,7 +148,7 @@ export default function DiscoverScreen() {
             </View>
 
             {/* Résultats */}
-            {hasSearched && recoResult && (
+            {hasSearched && recoResult ? (
               <>
                 {foodProfile && (
                   <View style={s.profileBadge}>
@@ -169,22 +157,17 @@ export default function DiscoverScreen() {
                     </Text>
                   </View>
                 )}
-
-                {/* Message honnête */}
                 {recoResult.message ? (
                   <View style={[s.messageBox, recoResult.bestLevel === 'ideal' ? s.messageIdeal : recoResult.bestLevel === 'aucun' ? s.messageAucun : s.messageBon]}>
                     <Text style={s.messageText}>{recoResult.message}</Text>
                   </View>
                 ) : null}
-
-                {/* Suggestion d'achat si aucun bon accord */}
                 {recoResult.idealSuggestion && recoResult.bestLevel !== 'ideal' && (
                   <View style={s.idealSuggestion}>
                     <Ionicons name="cart-outline" size={14} color={Colors.lieDeVin} />
                     <Text style={s.idealSuggestionText}>{recoResult.idealSuggestion}</Text>
                   </View>
                 )}
-
                 {recs.length === 0
                   ? <EmptyState icon="wine-outline" title="Aucune bouteille disponible" subtitle="Votre cave ne contient pas de vin adapté à ce plat." />
                   : <>
@@ -193,14 +176,26 @@ export default function DiscoverScreen() {
                     </>
                 }
               </>
-            )}
+            ) : (
+              <>
+                {/* Suggestions en grille wrap — remplace le scroll horizontal + le grand vide */}
+                <Text style={s.suggLabel}>Suggestions rapides</Text>
+                <View style={s.suggGrid}>
+                  {SUGGESTIONS_RAPIDES.map(s2 => (
+                    <TouchableOpacity key={s2} style={[chip.pill, plat === s2 && chip.active]} onPress={() => searchAccords(s2)}>
+                      <Text style={[chip.text, plat === s2 && chip.textActive]}>{s2}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-            {!hasSearched && (
-              <View style={s.emptyAccord}>
-                <Text style={s.emptyAccordIcon}>🍷</Text>
-                <Text style={s.emptyAccordTitle}>Trouvez l'accord parfait</Text>
-                <Text style={s.emptyAccordText}>Indiquez votre plat et l'algorithme sélectionne les meilleures bouteilles de votre cave.</Text>
-              </View>
+                {/* Petite astuce compacte */}
+                <View style={s.hintBanner}>
+                  <Ionicons name="bulb-outline" size={15} color={Colors.ambreChaud} />
+                  <Text style={s.hintText}>
+                    L'algorithme choisit les meilleures bouteilles de votre cave selon le plat saisi.
+                  </Text>
+                </View>
+              </>
             )}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -502,11 +497,12 @@ const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: Colors.cremeIvoire },
   header:  { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
   title:   { fontSize: 26, fontWeight: '800', color: Colors.brunMoka },
-  tabsScroll: { maxHeight: 46 },
-  tabsRow:    { paddingHorizontal: Spacing.lg, gap: Spacing.sm, flexDirection: 'row' },
-  tab:        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
+  subtitle:   { fontSize: 12, color: Colors.brunClair, marginTop: 2 },
+  tabsScroll: { maxHeight: 40 },
+  tabsRow:    { paddingHorizontal: Spacing.lg, gap: Spacing.sm, flexDirection: 'row', alignItems: 'center' },
+  tab:        { paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
   tabActive:  { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
-  tabText:    { fontSize: 13, fontWeight: '600', color: Colors.brunMoyen },
+  tabText:    { fontSize: 12, fontWeight: '600', color: Colors.brunMoyen },
   tabTextActive: { color: Colors.white },
   content: { padding: Spacing.lg, paddingBottom: 120 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.brunMoka, marginBottom: Spacing.md },
@@ -523,10 +519,10 @@ const s = StyleSheet.create({
   messageText:        { fontSize: 13, color: Colors.brunMoyen, lineHeight: 18 },
   idealSuggestion:    { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin },
   idealSuggestionText:{ fontSize: 12, color: Colors.lieDeVin, flex: 1, lineHeight: 17 },
-  emptyAccord: { alignItems: 'center', paddingTop: Spacing.xxxl, gap: Spacing.md },
-  emptyAccordIcon: { fontSize: 52 },
-  emptyAccordTitle: { fontSize: 18, fontWeight: '700', color: Colors.brunMoyen },
-  emptyAccordText: { fontSize: 13, color: Colors.brunClair, textAlign: 'center', lineHeight: 20 },
+  suggLabel:  { fontSize: 12, fontWeight: '700', color: Colors.brunMoyen, marginBottom: Spacing.sm, letterSpacing: 0.3 },
+  suggGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.lg },
+  hintBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud },
+  hintText:   { flex: 1, fontSize: 12, color: Colors.brunMoyen, lineHeight: 17, fontStyle: 'italic' },
   addBar:    { padding: Spacing.lg, paddingBottom: Spacing.xl, borderTopWidth: 1, borderTopColor: Colors.parchemin, backgroundColor: Colors.champagne },
   overlay:   { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   modalCard: { backgroundColor: Colors.champagne, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.xl, paddingBottom: 40 },
