@@ -12,11 +12,13 @@ import ANECDOTES from '../../data/anecdotes';
 const TODAY    = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 const ANECDOTE = ANECDOTES[Math.floor(Math.random() * ANECDOTES.length)];
 
+type EmpEntry = { caveName: string; emp: string; count: number };
+
 export default function DashboardScreen() {
   const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
   const { user } = useAuthStore();
-  const { caves, activeCave, activeLieu, fetchCaves, setActiveCave, setActiveLieu } = useCavesStore();
-  const { clearFilters } = useUIStore();
+  const { caves, activeLieu, fetchCaves, setActiveLieu } = useCavesStore();
+  const { setFilter } = useUIStore();
 
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
 
@@ -32,6 +34,21 @@ export default function DashboardScreen() {
     return caves.filter(c => c.location === activeLieu);
   }, [caves, activeLieu]);
 
+  // Emplacements de toutes les caves du lieu actif, avec comptage de bouteilles
+  const empEntries = useMemo<EmpEntry[]>(() => {
+    const entries: EmpEntry[] = [];
+    cavesInLieu.forEach(cave => {
+      cave.emplacements.forEach(emp => {
+        const count = bottles.filter(b => b.cave === cave.name && b.emplacement === emp).length;
+        entries.push({ caveName: cave.name, emp, count });
+      });
+    });
+    return entries;
+  }, [cavesInLieu, bottles]);
+
+  const hasEmplacements  = empEntries.length > 0;
+  const showEmplacements = caves.length > 0;
+
   const favorites  = useMemo(() => bottles.filter(b => b.isFavorite).slice(0, 3), [bottles]);
   const recent     = useMemo(() => [...bottles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottles]);
   const urgentList = useMemo(() => bottles.filter(b => isUrgent(b) && b.quantite > 0), [bottles]);
@@ -39,7 +56,7 @@ export default function DashboardScreen() {
 
   const firstName        = user?.name?.split(' ')[0] ?? 'vous';
   const showLieuSwitcher = lieus.length > 1;
-  const showCavePicker   = cavesInLieu.length > 1;
+  const multipleCaves    = cavesInLieu.length > 1;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -93,39 +110,53 @@ export default function DashboardScreen() {
           </ScrollView>
         )}
 
-        {/* ── Sélecteur de cave + bouton "Mes caves" ── */}
-        {caves.length > 0 && (
-          <View style={s.caveRow}>
-            {showCavePicker ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm }}>
-                  {cavesInLieu.map(c => {
-                    const isActive = activeCave?._id === c._id;
-                    return (
-                      <TouchableOpacity
-                        key={c._id}
-                        style={[s.cavePill, isActive && s.cavePillActive]}
-                        onPress={() => setActiveCave(c)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="home" size={12} color={isActive ? Colors.white : Colors.lieDeVin} />
-                        <Text style={[s.cavePillText, isActive && s.cavePillTextActive]}>{c.name}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            ) : activeCave ? (
-              <View style={s.singleCaveBadge}>
-                <Ionicons name="home" size={13} color={Colors.lieDeVin} />
-                <Text style={s.singleCaveText}>{activeCave.name}</Text>
+        {/* ── Emplacements ── */}
+        {showEmplacements && (
+          <View style={s.empSection}>
+            <View style={s.empHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="grid-outline" size={13} color={Colors.lieDeVin} />
+                <Text style={s.empTitle}>Emplacements</Text>
               </View>
-            ) : null}
+              <TouchableOpacity style={s.caveManageBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
+                <Ionicons name="home-outline" size={13} color={Colors.lieDeVin} />
+                <Text style={s.caveManageText}>Mes caves</Text>
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity style={s.caveManageBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
-              <Ionicons name="home-outline" size={14} color={Colors.lieDeVin} />
-              <Text style={s.caveManageText}>Mes caves</Text>
-            </TouchableOpacity>
+            {hasEmplacements ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.empScroll}>
+                {empEntries.map((entry, i) => (
+                  <TouchableOpacity
+                    key={`${entry.caveName}-${entry.emp}-${i}`}
+                    style={s.empCard}
+                    onPress={() => {
+                      setFilter('cave', entry.caveName);
+                      router.push('/(tabs)/cave');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={s.empCardTop}>
+                      <Ionicons name="layers-outline" size={16} color={Colors.lieDeVin} />
+                      <Text style={s.empCount}>{entry.count}</Text>
+                    </View>
+                    <Text style={s.empName} numberOfLines={2}>{entry.emp}</Text>
+                    {multipleCaves && (
+                      <Text style={s.empCaveName} numberOfLines={1}>{entry.caveName}</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <TouchableOpacity
+                style={s.empEmpty}
+                onPress={() => router.push('/manage-caves' as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={Colors.brunClair} />
+                <Text style={s.empEmptyText}>Aucun emplacement — configurez vos caves</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -256,18 +287,31 @@ const s = StyleSheet.create({
   lieuPillText:       { fontSize: 14, fontWeight: '700', color: Colors.lieDeVin },
   lieuPillTextActive: { color: Colors.white },
 
-  // Cave switcher
-  caveRow:    { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
-  cavePill:   { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.parchemin },
-  cavePillActive:     { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
-  cavePillText:       { fontSize: 13, fontWeight: '600', color: Colors.lieDeVin },
-  cavePillTextActive: { color: Colors.white },
+  // Emplacements
+  empSection: { marginBottom: Spacing.md },
+  empHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
+  empTitle:   { fontSize: 14, fontWeight: '700', color: Colors.brunMoka, letterSpacing: 0.2 },
+  empScroll:  { flexDirection: 'row', gap: Spacing.sm, paddingBottom: 4 },
 
-  singleCaveBadge: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignSelf: 'flex-start' },
-  singleCaveText:  { fontSize: 13, fontWeight: '600', color: Colors.brunMoyen },
+  empCard: {
+    width: 100,
+    backgroundColor: Colors.champagne,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.parchemin,
+    ...Shadow.sm,
+  },
+  empCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  empCount:   { fontSize: 18, fontWeight: '800', color: Colors.lieDeVin },
+  empName:    { fontSize: 12, fontWeight: '600', color: Colors.brunMoka, lineHeight: 16 },
+  empCaveName:{ fontSize: 10, color: Colors.brunClair, marginTop: 3, fontStyle: 'italic' },
 
-  caveManageBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.lieDeVin },
-  caveManageText: { fontSize: 12, fontWeight: '700', color: Colors.lieDeVin },
+  empEmpty:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.champagne, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin, borderStyle: 'dashed' },
+  empEmptyText: { fontSize: 12, color: Colors.brunClair, flex: 1 },
+
+  caveManageBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.lieDeVin },
+  caveManageText: { fontSize: 11, fontWeight: '700', color: Colors.lieDeVin },
 
   // Stats
   statsCard: { flexDirection: 'row', backgroundColor: Colors.lieDeVin, borderRadius: Radius.xl, paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },
