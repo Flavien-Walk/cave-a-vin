@@ -28,6 +28,7 @@ const UserCaveSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-UserCaveSchema.index({ userId: 1, name: 1 }, { unique: true });
+// Unique par utilisateur + nom + lieu (permet "Cave 1" dans Lyon ET dans Pau)
+UserCaveSchema.index({ userId: 1, name: 1, location: 1 }, { unique: true });
 
 module.exports = mongoose.model('UserCave', UserCaveSchema);

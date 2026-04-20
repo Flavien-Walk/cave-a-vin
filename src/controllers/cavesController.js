@@ -14,14 +14,24 @@ exports.create = async (req, res, next) => {
     const { name, location, emplacements } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: 'Le nom est obligatoire' });
 
-    const existing = await UserCave.findOne({ userId: req.userId, name: name.trim() });
-    if (existing) return res.status(409).json({ message: 'Une cave avec ce nom existe déjà' });
+    const normalizedLocation = location?.trim() || null;
+
+    // Unicité par nom + lieu (même nom autorisé dans des lieux différents)
+    const existing = await UserCave.findOne({
+      userId: req.userId,
+      name: name.trim(),
+      location: normalizedLocation,
+    });
+    if (existing) {
+      const lieuMsg = normalizedLocation ? ` dans "${normalizedLocation}"` : '';
+      return res.status(409).json({ message: `Une cave avec ce nom existe déjà${lieuMsg}` });
+    }
 
     const count = await UserCave.countDocuments({ userId: req.userId });
     const cave = await UserCave.create({
       userId: req.userId,
       name: name.trim(),
-      location: location?.trim() || undefined,
+      location: normalizedLocation || undefined,
       emplacements: Array.isArray(emplacements)
         ? emplacements.map(e => e.trim()).filter(Boolean)
         : [],
@@ -38,8 +48,25 @@ exports.update = async (req, res, next) => {
     if (!cave) return res.status(404).json({ message: 'Cave non trouvée' });
 
     const { name, location, emplacements } = req.body;
+
+    // Vérifier unicité nom+lieu si l'un ou l'autre change
+    if (name !== undefined || location !== undefined) {
+      const newName     = name !== undefined ? name.trim() : cave.name;
+      const newLocation = location !== undefined ? (location.trim() || null) : (cave.location || null);
+      const conflict = await UserCave.findOne({
+        userId: req.userId,
+        name: newName,
+        location: newLocation,
+        _id: { $ne: cave._id },
+      });
+      if (conflict) {
+        const lieuMsg = newLocation ? ` dans "${newLocation}"` : '';
+        return res.status(409).json({ message: `Une cave avec ce nom existe déjà${lieuMsg}` });
+      }
+    }
+
     if (name !== undefined) cave.name = name.trim();
-    if (location !== undefined) cave.location = location.trim();
+    if (location !== undefined) cave.location = location.trim() || undefined;
     if (Array.isArray(emplacements)) {
       cave.emplacements = emplacements.map(e => e.trim()).filter(Boolean);
     }
