@@ -1,5 +1,5 @@
 const BREVO_API_KEY    = process.env.BREVO_API_KEY;
-const SENDER_EMAIL     = process.env.BREVO_SENDER_EMAIL || 'flavienhypnose@gmail.com';
+const SENDER_EMAIL     = process.env.BREVO_SENDER_EMAIL || 'cavevin76@gmail.com';
 const SENDER_NAME      = 'Cave à Vin';
 
 // ── Envoi générique via Brevo REST ────────────────────────────────────────────
