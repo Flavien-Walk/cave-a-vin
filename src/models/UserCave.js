@@ -20,7 +20,7 @@ const UserCaveSchema = new mongoose.Schema({
   },
   emplacements: {
     type: [String],
-    default: ['Haut', 'Milieu', 'Bas'],
+    default: [],
   },
   isDefault: {
     type: Boolean,
