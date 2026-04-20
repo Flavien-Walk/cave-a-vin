@@ -25,19 +25,13 @@ const SORT_OPTIONS = [
 export default function CaveScreen() {
   const { bottles, isLoading, fetchBottles } = useBottleStore();
   const { caveView, activeFilters, searchQuery, sortBy, setCaveView, setFilter, clearFilters, setSearchQuery, setSortBy } = useUIStore();
-  const { caves, activeLieu, setActiveLieu } = useCavesStore();
+  const { caves, activeLieu } = useCavesStore();
   const [showFilters, setShowFilters] = useState(false);
 
   const { initSort } = useLocalSearchParams<{ initSort?: string }>();
   const effectiveSortBy = (initSort as any) || sortBy;
 
   useEffect(() => { fetchBottles(); }, []);
-
-  // Lieux distincts
-  const lieus = useMemo(
-    () => [...new Set(caves.map(c => c.location).filter(Boolean))] as string[],
-    [caves]
-  );
 
   // Caves du lieu actif (pour les chips de filtre par cave)
   const cavesInLieu = useMemo(() => {
@@ -61,7 +55,6 @@ export default function CaveScreen() {
   }, [bottles, caveNamesInLieu, activeLieu, searchQuery, activeFilters, effectiveSortBy]);
 
   const activeFilterCount = Object.values(activeFilters).filter(v => v && v !== false).length;
-  const showLieuSwitcher  = lieus.length > 1;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -74,31 +67,6 @@ export default function CaveScreen() {
             {activeLieu ? activeLieu : 'Mes vins'}
           </Text>
           <Text style={styles.count}>{filtered.length} bouteille{filtered.length !== 1 ? 's' : ''}</Text>
-
-          {/* Sélecteur de lieux compact — intégré dans le header */}
-          {showLieuSwitcher && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.lieuScroll}
-              contentContainerStyle={styles.lieuRow}
-            >
-              {lieus.map(lieu => {
-                const isActive = activeLieu === lieu;
-                return (
-                  <TouchableOpacity
-                    key={lieu}
-                    style={[styles.lieuChip, isActive && styles.lieuChipActive]}
-                    onPress={() => { setActiveLieu(lieu); setFilter('cave', undefined); }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="location" size={10} color={isActive ? Colors.white : Colors.lieDeVin} />
-                    <Text style={[styles.lieuChipText, isActive && styles.lieuChipTextActive]}>{lieu}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
         </View>
 
         <View style={styles.headerActions}>
@@ -251,14 +219,6 @@ const styles = StyleSheet.create({
   headerBtnActive: { backgroundColor: Colors.lieDeVin },
   filterBadge:     { position: 'absolute', top: -2, right: -2, backgroundColor: Colors.rougeAlerte, borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   filterBadgeText: { fontSize: 9, color: Colors.white, fontWeight: '700' },
-
-  // Lieu switcher — compact inline dans le header
-  lieuScroll: { marginTop: Spacing.sm },
-  lieuRow:    { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  lieuChip:         { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
-  lieuChipActive:   { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
-  lieuChipText:     { fontSize: 11, fontWeight: '700', color: Colors.lieDeVin },
-  lieuChipTextActive:{ color: Colors.white },
 
   searchRow:   { flexDirection: 'row', alignItems: 'center', marginHorizontal: Spacing.lg, marginBottom: Spacing.sm, backgroundColor: Colors.champagne, borderRadius: Radius.lg, paddingHorizontal: Spacing.md, borderWidth: 1.5, borderColor: Colors.parchemin, minHeight: 46 },
   searchIcon:  { marginRight: Spacing.sm },

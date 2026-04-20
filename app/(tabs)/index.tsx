@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ export default function DashboardScreen() {
   const { user } = useAuthStore();
   const { caves, activeLieu, fetchCaves, setActiveLieu } = useCavesStore();
   const { setFilter } = useUIStore();
+  const [showLieuModal, setShowLieuModal] = useState(false);
 
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
 
@@ -72,53 +73,22 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Mes lieux : selector compact horizontal ── */}
-        {caves.length > 0 && (
-          <View style={s.lieuRow}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.lieuPills}
-              style={{ flex: 1 }}
+        {/* ── Lieu actif + switch ── */}
+        {caves.length > 0 && lieuEntries.length > 0 && (
+          <View style={s.lieuBar}>
+            <TouchableOpacity
+              style={s.lieuSwitch}
+              onPress={() => lieuEntries.length > 1 && setShowLieuModal(true)}
+              activeOpacity={lieuEntries.length > 1 ? 0.7 : 1}
             >
-              {lieuEntries.length > 0 ? lieuEntries.map(({ lieu, nbBottles }) => {
-                const isActive = activeLieu === lieu;
-                return (
-                  <TouchableOpacity
-                    key={lieu}
-                    style={[s.lieuPill, isActive && s.lieuPillActive]}
-                    onPress={() => {
-                      setActiveLieu(lieu);
-                      setFilter('cave', undefined);
-                      router.push('/(tabs)/cave');
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="location" size={12} color={isActive ? Colors.white : Colors.lieDeVin} />
-                    <Text style={[s.lieuPillText, isActive && s.lieuPillTextActive]} numberOfLines={1}>
-                      {lieu}
-                    </Text>
-                    <View style={[s.lieuPillBadge, isActive && s.lieuPillBadgeActive]}>
-                      <Text style={[s.lieuPillBadgeText, isActive && s.lieuPillBadgeTextActive]}>
-                        {nbBottles}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }) : (
-                <TouchableOpacity
-                  style={s.lieuNone}
-                  onPress={() => router.push('/manage-caves' as any)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="add-circle-outline" size={14} color={Colors.brunClair} />
-                  <Text style={s.lieuNoneText}>Ajoutez un lieu à vos caves</Text>
-                </TouchableOpacity>
+              <Ionicons name="location" size={13} color={Colors.lieDeVin} />
+              <Text style={s.lieuSwitchText} numberOfLines={1}>{activeLieu ?? 'Mon lieu'}</Text>
+              {lieuEntries.length > 1 && (
+                <Ionicons name="chevron-down" size={14} color={Colors.lieDeVin} />
               )}
-            </ScrollView>
-
+            </TouchableOpacity>
             <TouchableOpacity style={s.manageBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
-              <Ionicons name="home-outline" size={13} color={Colors.lieDeVin} />
+              <Ionicons name="home-outline" size={12} color={Colors.lieDeVin} />
               <Text style={s.manageBtnText}>Mes caves</Text>
             </TouchableOpacity>
           </View>
@@ -192,6 +162,38 @@ export default function DashboardScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* ── Modal sélection de lieu ── */}
+      <Modal visible={showLieuModal} transparent animationType="slide" onRequestClose={() => setShowLieuModal(false)}>
+        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowLieuModal(false)}>
+          <View style={s.sheet}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Choisir un lieu</Text>
+            {lieuEntries.map(({ lieu, nbBottles }) => {
+              const active = activeLieu === lieu;
+              return (
+                <TouchableOpacity
+                  key={lieu}
+                  style={[s.sheetItem, active && s.sheetItemActive]}
+                  onPress={() => { setActiveLieu(lieu); setFilter('cave', undefined); setShowLieuModal(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="location" size={15} color={active ? Colors.lieDeVin : Colors.brunClair} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.sheetItemName, active && s.sheetItemNameActive]}>{lieu}</Text>
+                    <Text style={s.sheetItemCount}>{nbBottles} bouteille{nbBottles !== 1 ? 's' : ''}</Text>
+                  </View>
+                  {active && <Ionicons name="checkmark-circle" size={20} color={Colors.lieDeVin} />}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity style={s.sheetManage} onPress={() => { setShowLieuModal(false); router.push('/manage-caves' as any); }}>
+              <Ionicons name="settings-outline" size={14} color={Colors.brunMoyen} />
+              <Text style={s.sheetManageText}>Gérer mes caves</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -239,25 +241,26 @@ const s = StyleSheet.create({
   onboardingTitle: { fontSize: 15, fontWeight: '800', color: Colors.brunMoka, marginBottom: 3 },
   onboardingText:  { fontSize: 12, color: Colors.brunMoyen, lineHeight: 17 },
 
-  // Lieux — selector compact horizontal
-  lieuRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
-  lieuPills: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
+  // Lieu — barre compacte avec switch
+  lieuBar:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
+  lieuSwitch:    { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, backgroundColor: Colors.champagne, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1.5, borderColor: Colors.lieDeVin + '40', ...Shadow.sm },
+  lieuSwitchText:{ flex: 1, fontSize: 14, fontWeight: '700', color: Colors.lieDeVin },
 
-  lieuPill:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.parchemin },
-  lieuPillActive:{ backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin, ...Shadow.sm },
-  lieuPillText:       { fontSize: 13, fontWeight: '700', color: Colors.lieDeVin, maxWidth: 120 },
-  lieuPillTextActive: { color: Colors.white },
+  manageBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 9, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, flexShrink: 0 },
+  manageBtnText: { fontSize: 11, fontWeight: '600', color: Colors.brunMoyen },
 
-  lieuPillBadge:          { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  lieuPillBadgeActive:    { backgroundColor: 'rgba(255,255,255,0.25)' },
-  lieuPillBadgeText:      { fontSize: 10, fontWeight: '700', color: Colors.brunMoyen },
-  lieuPillBadgeTextActive:{ color: Colors.white },
-
-  lieuNone:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
-  lieuNoneText: { fontSize: 12, color: Colors.brunClair },
-
-  manageBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1.5, borderColor: Colors.lieDeVin, flexShrink: 0 },
-  manageBtnText: { fontSize: 11, fontWeight: '700', color: Colors.lieDeVin },
+  // Modal sélection lieu
+  overlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  sheet:     { backgroundColor: Colors.champagne, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingHorizontal: Spacing.lg, paddingBottom: 36, paddingTop: Spacing.md },
+  sheetHandle:{ width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.parchemin, alignSelf: 'center', marginBottom: Spacing.lg },
+  sheetTitle: { fontSize: 16, fontWeight: '800', color: Colors.brunMoka, marginBottom: Spacing.md },
+  sheetItem:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md, borderRadius: Radius.lg, paddingHorizontal: Spacing.sm, marginBottom: 2 },
+  sheetItemActive: { backgroundColor: Colors.lieDeVin + '0D' },
+  sheetItemName:       { fontSize: 15, fontWeight: '600', color: Colors.brunMoka },
+  sheetItemNameActive: { color: Colors.lieDeVin, fontWeight: '700' },
+  sheetItemCount:      { fontSize: 12, color: Colors.brunClair, marginTop: 1 },
+  sheetManage:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  sheetManageText: { fontSize: 13, color: Colors.brunMoyen },
 
   // Stats
   statsCard: { flexDirection: 'row', backgroundColor: Colors.lieDeVin, borderRadius: Radius.xl, paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },
