@@ -524,7 +524,7 @@ const s = StyleSheet.create({
   photoText:    { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
 
   form:          { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xxxl, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
   notePersoRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
   notePersoLabel:{ fontSize: 14, fontWeight: '600', color: Colors.brunMoyen, flex: 1 },
 });
