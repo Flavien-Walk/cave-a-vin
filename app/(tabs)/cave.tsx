@@ -63,6 +63,7 @@ export default function CaveScreen() {
       <View style={styles.header}>
         {/* Titre + count + lieux inline */}
         <View style={styles.headerLeft}>
+          <View style={styles.headerAccent} />
           <Text style={styles.title}>
             {activeLieu ? activeLieu : 'Mes vins'}
           </Text>
@@ -212,6 +213,7 @@ const styles = StyleSheet.create({
 
   header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
   headerLeft:    { flex: 1, marginRight: Spacing.sm },
+  headerAccent:  { width: 28, height: 3, borderRadius: 2, backgroundColor: Colors.lieDeVin, marginBottom: 6 },
   title:         { ...Typography.h2 },
   count:         { ...Typography.caption, color: Colors.brunMoyen, marginTop: 2 },
   headerActions: { flexDirection: 'row', gap: Spacing.sm, paddingTop: 4 },

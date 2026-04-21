@@ -19,11 +19,13 @@ import type { WineRecommendation, RecommendationResult } from '../../src/utils/r
 const TABS = ['Accords & plats', 'Mes Goûts', 'À boire bientôt', 'Wishlist'] as const;
 type Tab = typeof TABS[number];
 
-const SUGGESTIONS_RAPIDES = [
-  'Entrecôte', 'Saumon', 'Poulet rôti', 'Tajine agneau',
-  'Plateau fromages', 'Fruits de mer', 'Foie gras', 'Couscous',
-  'Pâtes carbonara', 'Sushi', 'Tarte chocolat', 'Apéritif',
-];
+const SUGGESTIONS_CATEGORIES = [
+  { label: 'Viandes & volailles', items: ['Entrecôte', 'Poulet rôti', 'Magret de canard', 'Gigot d\'agneau', 'Côte de bœuf'] },
+  { label: 'Poissons & mer',      items: ['Saumon', 'Fruits de mer', 'Huîtres', 'Homard', 'Sushi'] },
+  { label: 'Cuisine du monde',    items: ['Tajine agneau', 'Couscous', 'Foie gras', 'Pizza', 'Wok'] },
+  { label: 'Pâtes & fromages',    items: ['Pâtes carbonara', 'Risotto', 'Plateau fromages', 'Raclette'] },
+  { label: 'Desserts & apéro',    items: ['Tarte chocolat', 'Crème brûlée', 'Apéritif', 'Charcuterie'] },
+] as const;
 
 export default function DiscoverScreen() {
   const { bottles } = useBottleStore();
@@ -179,21 +181,26 @@ export default function DiscoverScreen() {
               </>
             ) : (
               <>
-                {/* Suggestions en grille wrap — remplace le scroll horizontal + le grand vide */}
-                <Text style={s.suggLabel}>Suggestions rapides</Text>
-                <View style={s.suggGrid}>
-                  {SUGGESTIONS_RAPIDES.map(s2 => (
-                    <TouchableOpacity key={s2} style={[chip.pill, plat === s2 && chip.active]} onPress={() => searchAccords(s2)}>
-                      <Text style={[chip.text, plat === s2 && chip.textActive]}>{s2}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                {/* Suggestions par catégorie */}
+                <Text style={s.suggTitle}>Choisissez un plat</Text>
+                {SUGGESTIONS_CATEGORIES.map(cat => (
+                  <View key={cat.label} style={s.suggCat}>
+                    <Text style={s.suggCatLabel}>{cat.label}</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.suggCatRow}>
+                      {cat.items.map(item => (
+                        <TouchableOpacity key={item} style={[chip.pill, plat === item && chip.active]} onPress={() => searchAccords(item)}>
+                          <Text style={[chip.text, plat === item && chip.textActive]}>{item}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                ))}
 
-                {/* Petite astuce compacte */}
+                {/* Astuce */}
                 <View style={s.hintBanner}>
                   <Ionicons name="bulb-outline" size={15} color={Colors.ambreChaud} />
                   <Text style={s.hintText}>
-                    L'algorithme choisit les meilleures bouteilles de votre cave selon le plat saisi.
+                    Tapez n'importe quel plat ou ingrédient — l'algorithme sélectionne les bouteilles les mieux adaptées dans votre cave.
                   </Text>
                 </View>
               </>
@@ -342,7 +349,15 @@ export default function DiscoverScreen() {
             ? <ActivityIndicator color={Colors.lieDeVin} style={{ marginTop: Spacing.xxxl }} />
             : urgents.length === 0
               ? <EmptyState icon="checkmark-circle-outline" title="Tout va bien" subtitle="Aucune bouteille urgente à consommer." />
-              : urgents.map(b => <UrgentCard key={b._id} bottle={b} />)
+              : <>
+                  <View style={s.urgentHeader}>
+                    <Ionicons name="time-outline" size={14} color={Colors.rougeAlerte} />
+                    <Text style={s.urgentHeaderText}>
+                      {urgents.length} bouteille{urgents.length > 1 ? 's' : ''} approchent ou ont dépassé leur date de consommation optimale. Ouvrez-les pour les apprécier à leur meilleur.
+                    </Text>
+                  </View>
+                  {urgents.map(b => <UrgentCard key={b._id} bottle={b} />)}
+                </>
           }
         </ScrollView>
       )}
@@ -530,10 +545,14 @@ const s = StyleSheet.create({
   messageText:        { fontSize: 13, color: Colors.brunMoyen, lineHeight: 18 },
   idealSuggestion:    { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin },
   idealSuggestionText:{ fontSize: 12, color: Colors.lieDeVin, flex: 1, lineHeight: 17 },
-  suggLabel:  { fontSize: 12, fontWeight: '700', color: Colors.brunMoyen, marginBottom: Spacing.sm, letterSpacing: 0.3 },
-  suggGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.lg },
-  hintBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud },
-  hintText:   { flex: 1, fontSize: 12, color: Colors.brunMoyen, lineHeight: 17, fontStyle: 'italic' },
+  suggTitle:    { fontSize: 13, fontWeight: '700', color: Colors.brunMoyen, marginBottom: Spacing.md },
+  suggCat:      { marginBottom: Spacing.md },
+  suggCatLabel: { fontSize: 10, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: Spacing.sm },
+  suggCatRow:   { flexDirection: 'row', gap: Spacing.sm },
+  hintBanner:   { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud, marginTop: Spacing.sm },
+  hintText:     { flex: 1, fontSize: 12, color: Colors.brunMoyen, lineHeight: 17, fontStyle: 'italic' },
+  urgentHeader:     { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.rougeAlerteLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.rougeAlerte },
+  urgentHeaderText: { flex: 1, fontSize: 12, color: Colors.rougeAlerte, lineHeight: 17 },
   addBar:    { padding: Spacing.lg, paddingBottom: Spacing.xl, borderTopWidth: 1, borderTopColor: Colors.parchemin, backgroundColor: Colors.champagne },
   overlay:   { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   modalCard: { backgroundColor: Colors.champagne, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.xl, paddingBottom: 40 },
