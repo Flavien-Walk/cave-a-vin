@@ -23,9 +23,6 @@ exports.preRegister = async (req, res, next) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    // Log toujours le code dans la console (visible dans les logs Render)
-    console.log(`[pre-register] Code OTP généré pour ${normalizedEmail}: ${code}`);
-
     // Envoi email non-bloquant — la requête réussit même si Brevo échoue
     sendVerificationCodeEmail(normalizedEmail, code).catch(err => {
       console.error(`[pre-register] Erreur Brevo pour ${normalizedEmail}:`, err.message);

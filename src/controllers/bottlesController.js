@@ -23,10 +23,26 @@ exports.getOne = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Champs modifiables par le client — protège userId, _id, notes, timestamps
+const BOTTLE_WRITABLE_FIELDS = [
+  'nom', 'producteur', 'region', 'appellation', 'annee', 'pays', 'cepage',
+  'couleur', 'format', 'quantite', 'cave', 'emplacement',
+  'prixAchat', 'lieuAchat', 'dateAchat',
+  'consommerAvant', 'consommerApresOptimal',
+  'photoUrl', 'photoThumbUrl',
+  'isFavorite', 'notePerso', 'source',
+];
+
+function pickBottleFields(body) {
+  return Object.fromEntries(
+    BOTTLE_WRITABLE_FIELDS.filter(k => k in body).map(k => [k, body[k]])
+  );
+}
+
 // ── POST /api/bottles ────────────────────────────────────────────────────────
 exports.create = async (req, res, next) => {
   try {
-    const bottle = await Bottle.create({ ...req.body, userId: req.userId });
+    const bottle = await Bottle.create({ ...pickBottleFields(req.body), userId: req.userId });
     res.status(201).json(bottle);
   } catch (err) { next(err); }
 };
@@ -36,7 +52,7 @@ exports.update = async (req, res, next) => {
   try {
     const bottle = await Bottle.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      { $set: req.body },
+      { $set: pickBottleFields(req.body) },
       { new: true, runValidators: true }
     );
     if (!bottle) return res.status(404).json({ message: 'Bouteille introuvable.' });
@@ -312,8 +328,11 @@ exports.suggestWine = async (req, res, next) => {
     else if (/agneau|bœuf|canard|gibier|magret/.test(platLower)) couleurs = ['rouge'];
     else if (/dessert|tarte|gâteau|chocolat/.test(platLower)) couleurs = ['effervescent', 'moelleux'];
     else if (/foie gras/.test(platLower)) couleurs = ['moelleux', 'effervescent'];
-    const bottles = await Bottle.find({ userId: req.userId, quantite: { $gt: 0 }, couleur: { $in: couleurs } })
-      .sort({ 'notes.note': -1 }).limit(5);
+    const bottlesRaw = await Bottle.find({ userId: req.userId, quantite: { $gt: 0 }, couleur: { $in: couleurs } });
+    // Tri par note moyenne décroissante (averageNote est un virtual, pas un champ stocké)
+    const bottles = bottlesRaw
+      .sort((a, b) => (b.averageNote ?? 0) - (a.averageNote ?? 0))
+      .slice(0, 5);
     res.json({ plat, suggestions: couleurs, bottles });
   } catch (err) { next(err); }
 };
