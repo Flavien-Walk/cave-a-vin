@@ -95,7 +95,7 @@ export default function ForgotPasswordScreen() {
               <Text style={s.sentHint}>Vérifiez aussi vos spams.</Text>
 
               <TouchableOpacity
-                style={s.btn}
+                style={[s.btn, { marginTop: Spacing.lg }]}
                 onPress={() => router.push({ pathname: '/(auth)/reset-password', params: { email: email.trim() } })}
                 activeOpacity={0.85}
               >
@@ -116,7 +116,7 @@ export default function ForgotPasswordScreen() {
 
 const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: Colors.cremeIvoire },
-  scroll:  { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg },
+  scroll:  { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.xxxl },
 
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
 
@@ -137,12 +137,13 @@ const s = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 16,
     alignItems: 'center',
+    alignSelf: 'stretch',
     marginTop: Spacing.sm,
   },
   btnText: { fontSize: 16, fontWeight: '700', color: Colors.white },
 
   sentCard:  { alignItems: 'center', gap: Spacing.md, paddingTop: Spacing.lg },
-  sentIcon:  { marginBottom: Spacing.sm },
+  sentIcon:  {},
   sentTitle: { fontSize: 20, fontWeight: '800', color: Colors.brunMoka },
   sentText:  { ...Typography.body, color: Colors.brunMoyen, textAlign: 'center', lineHeight: 22 },
   sentHint:  { fontSize: 12, color: Colors.brunClair, textAlign: 'center' },
