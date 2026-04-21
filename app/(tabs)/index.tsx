@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../src/constants';
 import { useBottleStore, useAuthStore, useCavesStore, useUIStore } from '../../src/stores';
@@ -21,7 +21,13 @@ export default function DashboardScreen() {
   const { setFilter } = useUIStore();
   const [showLieuModal, setShowLieuModal] = useState(false);
 
+  // Initial load (mount)
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
+
+  // Re-fetch quand l'écran revient au premier plan (changement de tab, retour depuis une page)
+  useFocusEffect(
+    useCallback(() => { fetchBottles(); fetchStats(); }, [])
+  );
 
   // Lieux réels de l'utilisateur (dérivés des caves)
   const lieuEntries = useMemo<LieuEntry[]>(() => {

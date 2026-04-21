@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TextInput,
   TouchableOpacity, RefreshControl, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Typography } from '../../src/constants';
 import { COULEURS_VIN } from '../../src/constants';
@@ -32,6 +32,7 @@ export default function CaveScreen() {
   const effectiveSortBy = (initSort as any) || sortBy;
 
   useEffect(() => { fetchBottles(); }, []);
+  useFocusEffect(useCallback(() => { fetchBottles(); }, []));
 
   // Caves du lieu actif (pour les chips de filtre par cave)
   const cavesInLieu = useMemo(() => {

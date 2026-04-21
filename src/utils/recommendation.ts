@@ -45,51 +45,86 @@ function getUserNote(bottle: Bottle): number | null {
   return Math.round((notes.reduce((s, n) => s + n, 0) / notes.length) * 10) / 10;
 }
 
-// ── Déduplication métier ──────────────────────────────────────────────────────
-// Clé : nom + producteur + annee (insensible à la casse, null normalisé à '').
-// Un même vin saisi dans plusieurs caves ou en plusieurs lots est réduit à une
-// seule entrée. Critères de sélection par priorité décroissante :
-//   1. Stock disponible (plus c'est fourni, plus utile pour proposer)
-//   2. Note utilisateur (garder la mieux notée si stock identique)
-//   3. Favori (préférer le favori si note identique)
+// ── Déduplication métier — deux niveaux ─────────────────────────────────────
+//
+// Niveau 1 (clé primaire) : nom normalisé + millésime
+//   → regroupe toutes les entrées qui représentent logiquement le même vin
+//
+// Niveau 2 (clé secondaire) : producteur
+//   → à l'intérieur d'un groupe nom+annee :
+//     • producteur vide  = "inconnu" → absorbé dans le meilleur producteur identifié
+//     • producteurs différents NON vides → vins genuinement différents (ex : même
+//       appellation, mais deux domaines distincts) → conservés séparément
+//
+// Ce design évite le faux doublon le plus fréquent :
+//   même bouteille saisie manuellement (sans producteur) + scannée (avec producteur)
+//   → une seule carte dans les recommandations.
+//
+// Critères de sélection au sein d'un groupe (par priorité décroissante) :
+//   1. Stock (plus fourni = plus utile à proposer)
+//   2. Note utilisateur
+//   3. Favori
 //   4. Richesse des métadonnées (région + appellation + cépage + couleur)
 
 function metaScore(b: Bottle): number {
   return (b.region ? 1 : 0) + (b.appellation ? 1 : 0) + (b.cepage ? 1 : 0) + (b.couleur ? 1 : 0);
 }
 
+function selectBetter(a: Bottle, b: Bottle): Bottle {
+  if (a.quantite !== b.quantite)              return a.quantite > b.quantite ? a : b;
+  const aN = getUserNote(a) ?? 0, bN = getUserNote(b) ?? 0;
+  if (aN !== bN)                              return aN > bN ? a : b;
+  if (a.isFavorite !== b.isFavorite)          return a.isFavorite ? a : b;
+  return metaScore(a) >= metaScore(b) ? a : b;
+}
+
 function deduplicateBottles(bottles: Bottle[]): Bottle[] {
-  return Object.values(
-    bottles.reduce<Record<string, Bottle>>((acc, b) => {
-      const key = [
-        (b.nom ?? '').toLowerCase().trim(),
-        (b.producteur ?? '').toLowerCase().trim(),
-        String(b.annee ?? ''),
-      ].join('\0');
+  // Niveau 1 : grouper par nom + annee
+  const groups = new Map<string, Bottle[]>();
+  for (const b of bottles) {
+    const key = (b.nom ?? '').toLowerCase().trim() + '\0' + String(b.annee ?? '');
+    const arr = groups.get(key) ?? [];
+    arr.push(b);
+    groups.set(key, arr);
+  }
 
-      if (!acc[key]) { acc[key] = b; return acc; }
-      const prev = acc[key];
+  const result: Bottle[] = [];
 
-      // 1. Stock
-      if (b.quantite !== prev.quantite) {
-        if (b.quantite > prev.quantite) acc[key] = b;
-        return acc;
+  for (const group of groups.values()) {
+    if (group.length === 1) { result.push(group[0]); continue; }
+
+    // Niveau 2 : séparer avec / sans producteur
+    const withProd = new Map<string, Bottle>(); // producteur normalisé → meilleure entrée
+    let withoutProd: Bottle | null = null;       // meilleure entrée sans producteur
+
+    for (const b of group) {
+      const prod = (b.producteur ?? '').toLowerCase().trim();
+      if (prod) {
+        const existing = withProd.get(prod);
+        withProd.set(prod, existing ? selectBetter(b, existing) : b);
+      } else {
+        withoutProd = withoutProd ? selectBetter(b, withoutProd) : b;
       }
-      // 2. Note utilisateur
-      const bNote = getUserNote(b) ?? 0;
-      const pNote = getUserNote(prev) ?? 0;
-      if (bNote !== pNote) {
-        if (bNote > pNote) acc[key] = b;
-        return acc;
+    }
+
+    if (withProd.size > 0) {
+      // Des entrées avec producteur existent — l'entrée sans producteur est le
+      // même vin saisi incompletement : on l'absorbe dans la meilleure entrée identifiée.
+      if (withoutProd) {
+        let bestKey = [...withProd.keys()][0];
+        for (const [k, v] of withProd) {
+          if (selectBetter(v, withProd.get(bestKey)!) === v) bestKey = k;
+        }
+        withProd.set(bestKey, selectBetter(withoutProd, withProd.get(bestKey)!));
       }
-      // 3. Favori
-      if (b.isFavorite && !prev.isFavorite) { acc[key] = b; return acc; }
-      if (!b.isFavorite && prev.isFavorite) return acc;
-      // 4. Richesse métadonnées
-      if (metaScore(b) > metaScore(prev)) acc[key] = b;
-      return acc;
-    }, {})
-  );
+      result.push(...withProd.values());
+    } else {
+      // Uniquement des entrées sans producteur — déjà réduites à la meilleure
+      result.push(withoutProd!);
+    }
+  }
+
+  return result;
 }
 
 // ── Score d'une bouteille contre un accord ────────────────────────────────────

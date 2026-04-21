@@ -12,7 +12,7 @@ import { Input, Button, WineBadge, StarRating } from '../../src/components/ui';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { getRecommendations, analyzeFood } from '../../src/utils/recommendation';
 import { getWineColorHex } from '../../src/utils/bottle.utils';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import type { WishlistItem, WishlistPriorite, Bottle, TasteProfile, SmartReco } from '../../src/types';
 import type { WineRecommendation, RecommendationResult } from '../../src/utils/recommendation';
 
@@ -68,6 +68,8 @@ export default function DiscoverScreen() {
   const [addLoading, setAddLoading]   = useState(false);
 
   useEffect(() => { fetchItems(); fetchBottles(); }, []);
+  // Rafraîchit les bouteilles à chaque focus pour que les accords restent à jour
+  useFocusEffect(useCallback(() => { fetchBottles(); }, []));
 
   useEffect(() => {
     if (activeTab === 'À boire bientôt') loadUrgents();

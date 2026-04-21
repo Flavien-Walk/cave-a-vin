@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
 import { useBottleStore } from '../../src/stores';
 import { getWineColorHex, formatPrice, isUrgent } from '../../src/utils/bottle.utils';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import type { CaveStats, Bottle } from '../../src/types';
 
 const WINE_LABELS: Record<string, string> = {
@@ -237,6 +237,7 @@ function computeGoûts(bottles: Bottle[]): TasteItem[] {
 export default function StatsScreen() {
   const { stats, bottles, isStatsLoading, fetchStats } = useBottleStore();
   useEffect(() => { fetchStats(); }, []);
+  useFocusEffect(useCallback(() => { fetchStats(); }, []));
 
   const insights        = useMemo(() => stats && bottles.length > 0 ? computeInsights(stats, bottles)       : [], [stats, bottles]);
   const equilibre       = useMemo(() => stats ? computeEquilibre(stats)                                      : [], [stats]);
