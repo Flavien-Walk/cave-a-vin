@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
 import { API_URL } from '../constants';
 
 const client = axios.create({
@@ -19,7 +20,16 @@ client.interceptors.request.use(async (config) => {
 
 client.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
+    if (err.response?.status === 401) {
+      // Token expiré ou invalide — nettoyage session et redirect login
+      try {
+        await SecureStore.deleteItemAsync('cave_token');
+        await SecureStore.deleteItemAsync('cave_user');
+      } catch { /* ignore */ }
+      router.replace('/(auth)/login');
+      return Promise.reject(new Error('Session expirée. Veuillez vous reconnecter.'));
+    }
     const message =
       err.response?.data?.message ??
       (err.code === 'ECONNABORTED' ? 'La requête a expiré.' : 'Erreur réseau.');

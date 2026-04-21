@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { cavesApi } from '../api/caves.api';
 import type { UserCave, CreateCaveDto } from '../api/caves.api';
+import { useUIStore } from './uiStore';
 
 interface CavesState {
   caves:      UserCave[];
@@ -101,6 +102,9 @@ export const useCavesStore = create<CavesState>((set, get) => ({
       ? caves.filter(c => c.location === lieu)
       : caves.filter(c => !c.location);
     const activeCave = cavesInLieu.find(c => c.isDefault) ?? cavesInLieu[0] ?? null;
+    // Réinitialise le filtre cave dans uiStore pour éviter d'afficher un filtre
+    // appartenant à l'ancien lieu (listerait 0 résultat sans explication)
+    useUIStore.getState().setFilter('cave', undefined);
     set({ activeLieu: lieu, activeCave });
   },
 
