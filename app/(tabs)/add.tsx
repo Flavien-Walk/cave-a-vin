@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Image,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -41,7 +41,6 @@ const formatOptions: SelectOption[]  = FORMATS_BOUTEILLE.map(f => ({ label: f.la
 export default function AddScreen() {
   const { addBottle } = useBottleStore();
   const { caves, activeCave, fetchCaves } = useCavesStore();
-  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -338,8 +337,8 @@ export default function AddScreen() {
           <View style={{ height: 24 }} />
         </ScrollView>
 
-        {/* Footer sticky — reste visible au-dessus du clavier grâce au KAV */}
-        <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
+        {/* Footer sticky — paddingBottom fixe : la tab bar gère déjà la safe area */}
+        <View style={s.footer}>
           {step < 2
             ? <Button label="Continuer" onPress={handleNext} fullWidth icon={<Ionicons name="arrow-forward" size={16} color={Colors.white} />} />
             : <Button label="Ajouter à ma cave" onPress={handleSave} loading={loading} fullWidth icon={<Ionicons name="checkmark" size={16} color={Colors.white} />} />
@@ -531,7 +530,7 @@ const s = StyleSheet.create({
   photoText:    { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
 
   form:          { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
   notePersoRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
   notePersoLabel:{ fontSize: 14, fontWeight: '600', color: Colors.brunMoyen, flex: 1 },
 });
