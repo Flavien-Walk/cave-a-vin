@@ -27,6 +27,8 @@ const SUGGESTIONS_CATEGORIES = [
   { label: 'Desserts & apéro',    items: ['Tarte chocolat', 'Crème brûlée', 'Apéritif', 'Charcuterie'] },
 ] as const;
 
+const QUICK_SUGGESTIONS = ['Entrecôte', 'Saumon', 'Huîtres', 'Foie gras', 'Fromages', 'Magret', 'Poulet rôti'] as const;
+
 export default function DiscoverScreen() {
   const { bottles, fetchBottles } = useBottleStore();
   const { items, isLoading, fetchItems, addItem, deleteItem, markPurchased } = useWishlistStore();
@@ -45,6 +47,9 @@ export default function DiscoverScreen() {
   // Urgents
   const [urgents, setUrgents]     = useState<Bottle[]>([]);
   const [urgLoading, setUrgLoading] = useState(false);
+
+  // Category bottom sheet
+  const [showCatSheet, setShowCatSheet] = useState(false);
 
   // Wishlist modal
   const [showAdd, setShowAdd]         = useState(false);
@@ -199,26 +204,28 @@ export default function DiscoverScreen() {
               </>
             ) : (
               <>
-                {/* Suggestions par catégorie */}
-                <Text style={s.suggTitle}>Choisissez un plat</Text>
-                {SUGGESTIONS_CATEGORIES.map(cat => (
-                  <View key={cat.label} style={s.suggCat}>
-                    <Text style={s.suggCatLabel}>{cat.label}</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.suggCatRow}>
-                      {cat.items.map(item => (
-                        <TouchableOpacity key={item} style={[chip.pill, plat === item && chip.active]} onPress={() => searchAccords(item)}>
-                          <Text style={[chip.text, plat === item && chip.textActive]}>{item}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                ))}
+                {/* Suggestions rapides */}
+                <Text style={s.suggTitle}>Idées rapides</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.quickRow} style={s.quickScroll}>
+                  {QUICK_SUGGESTIONS.map(item => (
+                    <TouchableOpacity key={item} style={chip.pill} onPress={() => searchAccords(item)}>
+                      <Text style={chip.text}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {/* Explorer par catégorie */}
+                <TouchableOpacity style={s.catBtn} onPress={() => setShowCatSheet(true)} activeOpacity={0.75}>
+                  <Ionicons name="grid-outline" size={15} color={Colors.lieDeVin} />
+                  <Text style={s.catBtnText}>Explorer par catégorie</Text>
+                  <Ionicons name="chevron-forward" size={15} color={Colors.lieDeVin} />
+                </TouchableOpacity>
 
                 {/* Astuce */}
                 <View style={s.hintBanner}>
-                  <Ionicons name="bulb-outline" size={15} color={Colors.ambreChaud} />
+                  <Ionicons name="bulb-outline" size={14} color={Colors.ambreChaud} />
                   <Text style={s.hintText}>
-                    Tapez n'importe quel plat ou ingrédient — l'algorithme sélectionne les bouteilles les mieux adaptées dans votre cave.
+                    Tapez n'importe quel plat — l'algorithme sélectionne les bouteilles les plus adaptées dans votre cave.
                   </Text>
                 </View>
               </>
@@ -403,6 +410,41 @@ export default function DiscoverScreen() {
         </>
       )}
 
+      {/* Bottom sheet — catégories */}
+      <Modal visible={showCatSheet} transparent animationType="slide" onRequestClose={() => setShowCatSheet(false)}>
+        <View style={s.overlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowCatSheet(false)} />
+          <View style={s.catSheet}>
+            <View style={s.catSheetHandle} />
+            <View style={s.catSheetHeader}>
+              <Text style={s.catSheetTitle}>Explorer par plat</Text>
+              <TouchableOpacity onPress={() => setShowCatSheet(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={20} color={Colors.brunMoyen} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {SUGGESTIONS_CATEGORIES.map(cat => (
+                <View key={cat.label} style={s.sheetCat}>
+                  <Text style={s.sheetCatLabel}>{cat.label}</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, paddingBottom: 2 }}>
+                    {cat.items.map(item => (
+                      <TouchableOpacity
+                        key={item}
+                        style={chip.pill}
+                        onPress={() => { setShowCatSheet(false); searchAccords(item); }}
+                      >
+                        <Text style={chip.text}>{item}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              ))}
+              <View style={{ height: Spacing.xl }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal wishlist */}
       <Modal visible={showAdd} transparent animationType="slide">
         <View style={s.overlay}>
@@ -566,12 +608,19 @@ const s = StyleSheet.create({
   messageText:        { fontSize: 13, color: Colors.brunMoyen, lineHeight: 18 },
   idealSuggestion:    { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin },
   idealSuggestionText:{ fontSize: 12, color: Colors.lieDeVin, flex: 1, lineHeight: 17 },
-  suggTitle:    { fontSize: 12, fontWeight: '700', color: Colors.brunMoyen, marginBottom: Spacing.sm },
-  suggCat:      { marginBottom: Spacing.sm },
-  suggCatLabel: { fontSize: 9, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 },
-  suggCatRow:   { flexDirection: 'row', gap: 6 },
-  hintBanner:   { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud, marginTop: Spacing.sm },
+  suggTitle:    { fontSize: 11, fontWeight: '700', color: Colors.brunClair, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: Spacing.sm },
+  quickScroll:  { marginBottom: Spacing.md },
+  quickRow:     { flexDirection: 'row', gap: 6, paddingBottom: 2 },
+  catBtn:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.champagne, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.parchemin, paddingHorizontal: Spacing.md, paddingVertical: 12, marginBottom: Spacing.md },
+  catBtnText:   { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.lieDeVin },
+  hintBanner:   { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud },
   hintText:     { flex: 1, fontSize: 12, color: Colors.brunMoyen, lineHeight: 17, fontStyle: 'italic' },
+  catSheet:      { backgroundColor: Colors.cremeIvoire, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingTop: Spacing.md, paddingHorizontal: Spacing.xl, paddingBottom: 0, maxHeight: '72%' },
+  catSheetHandle:{ width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.parchemin, alignSelf: 'center', marginBottom: Spacing.lg },
+  catSheetHeader:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.lg },
+  catSheetTitle: { fontSize: 16, fontWeight: '800', color: Colors.brunMoka },
+  sheetCat:      { marginBottom: Spacing.lg },
+  sheetCatLabel: { fontSize: 9, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   urgentHeader:     { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.rougeAlerteLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.rougeAlerte },
   urgentHeaderText: { flex: 1, fontSize: 12, color: Colors.rougeAlerte, lineHeight: 17 },
   addBar:    { padding: Spacing.lg, paddingBottom: Spacing.xl, borderTopWidth: 1, borderTopColor: Colors.parchemin, backgroundColor: Colors.champagne },
