@@ -274,7 +274,12 @@ export default function AddScreen() {
         </View>
       )}
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* KAV englobe ScrollView + footer pour que le bouton remonte avec le clavier */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
         <ScrollView
           contentContainerStyle={s.form}
           keyboardShouldPersistTaps="handled"
@@ -321,24 +326,25 @@ export default function AddScreen() {
           {step === 2 && (
             <>
               <SelectModal label="Cave" value={cave} options={caveOptions} onChange={v => { setCave(v); setEmplacement(''); }} placeholder="Choisir une cave" required />
-              {/* L'emplacement n'est affiché que si la cave en possède (ex : pas pour Marseillan) */}
+              {/* L'emplacement n'est affiché que si la cave en possède */}
               {emplacementOptions.length > 0 && (
                 <SelectModal label="Emplacement" value={emplacement} options={emplacementOptions} onChange={setEmplacement} placeholder="Choisir un emplacement" required />
               )}
             </>
           )}
 
-          <View style={{ height: 40 }} />
+          {/* Espace pour que le dernier champ ne soit pas caché par le footer */}
+          <View style={{ height: 24 }} />
         </ScrollView>
-      </KeyboardAvoidingView>
 
-      {/* Actions bas */}
-      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
-        {step < 2
-          ? <Button label="Continuer" onPress={handleNext} fullWidth icon={<Ionicons name="arrow-forward" size={16} color={Colors.white} />} />
-          : <Button label="Ajouter à ma cave" onPress={handleSave} loading={loading} fullWidth icon={<Ionicons name="checkmark" size={16} color={Colors.white} />} />
-        }
-      </View>
+        {/* Footer sticky — reste visible au-dessus du clavier grâce au KAV */}
+        <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
+          {step < 2
+            ? <Button label="Continuer" onPress={handleNext} fullWidth icon={<Ionicons name="arrow-forward" size={16} color={Colors.white} />} />
+            : <Button label="Ajouter à ma cave" onPress={handleSave} loading={loading} fullWidth icon={<Ionicons name="checkmark" size={16} color={Colors.white} />} />
+          }
+        </View>
+      </KeyboardAvoidingView>
 
       {/* Overlay analyse en cours */}
       {loading && (
@@ -524,7 +530,7 @@ const s = StyleSheet.create({
   photoText:    { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
 
   form:          { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xxxl, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
   notePersoRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
   notePersoLabel:{ fontSize: 14, fontWeight: '600', color: Colors.brunMoyen, flex: 1 },
 });
