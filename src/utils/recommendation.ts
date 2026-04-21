@@ -45,6 +45,53 @@ function getUserNote(bottle: Bottle): number | null {
   return Math.round((notes.reduce((s, n) => s + n, 0) / notes.length) * 10) / 10;
 }
 
+// ── Déduplication métier ──────────────────────────────────────────────────────
+// Clé : nom + producteur + annee (insensible à la casse, null normalisé à '').
+// Un même vin saisi dans plusieurs caves ou en plusieurs lots est réduit à une
+// seule entrée. Critères de sélection par priorité décroissante :
+//   1. Stock disponible (plus c'est fourni, plus utile pour proposer)
+//   2. Note utilisateur (garder la mieux notée si stock identique)
+//   3. Favori (préférer le favori si note identique)
+//   4. Richesse des métadonnées (région + appellation + cépage + couleur)
+
+function metaScore(b: Bottle): number {
+  return (b.region ? 1 : 0) + (b.appellation ? 1 : 0) + (b.cepage ? 1 : 0) + (b.couleur ? 1 : 0);
+}
+
+function deduplicateBottles(bottles: Bottle[]): Bottle[] {
+  return Object.values(
+    bottles.reduce<Record<string, Bottle>>((acc, b) => {
+      const key = [
+        (b.nom ?? '').toLowerCase().trim(),
+        (b.producteur ?? '').toLowerCase().trim(),
+        String(b.annee ?? ''),
+      ].join('\0');
+
+      if (!acc[key]) { acc[key] = b; return acc; }
+      const prev = acc[key];
+
+      // 1. Stock
+      if (b.quantite !== prev.quantite) {
+        if (b.quantite > prev.quantite) acc[key] = b;
+        return acc;
+      }
+      // 2. Note utilisateur
+      const bNote = getUserNote(b) ?? 0;
+      const pNote = getUserNote(prev) ?? 0;
+      if (bNote !== pNote) {
+        if (bNote > pNote) acc[key] = b;
+        return acc;
+      }
+      // 3. Favori
+      if (b.isFavorite && !prev.isFavorite) { acc[key] = b; return acc; }
+      if (!b.isFavorite && prev.isFavorite) return acc;
+      // 4. Richesse métadonnées
+      if (metaScore(b) > metaScore(prev)) acc[key] = b;
+      return acc;
+    }, {})
+  );
+}
+
 // ── Score d'une bouteille contre un accord ────────────────────────────────────
 
 function scoreBottle(
@@ -146,9 +193,11 @@ export function analyzeFood(platText: string): FoodProfile | null {
 }
 
 // ── getRecommendations ────────────────────────────────────────────────────────
+// `bottles` doit déjà être filtré par le lieu actif si applicable (discover.tsx).
 
 export function getRecommendations(bottles: Bottle[], platText: string): RecommendationResult {
-  const available = bottles.filter(b => b.quantite > 0);
+  // Déduplication appliquée en premier sur toutes les branches (plat reconnu ET non reconnu)
+  const available = deduplicateBottles(bottles.filter(b => b.quantite > 0));
 
   if (!platText.trim() || !available.length) {
     return { wines: [], message: '', hasIdeal: false, bestLevel: 'aucun', foodLabel: platText };
@@ -181,22 +230,8 @@ export function getRecommendations(bottles: Bottle[], platText: string): Recomme
     };
   }
 
-  // ── Dédoublonner par (nom + producteur + annee) avant scoring ────────────────
-  // Garde l'entrée avec le stock le plus élevé (si égal, l'ordre de fetchBottles)
-  const deduped = Object.values(
-    available.reduce<Record<string, Bottle>>((acc, b) => {
-      const key = [
-        (b.nom ?? '').toLowerCase().trim(),
-        (b.producteur ?? '').toLowerCase().trim(),
-        String(b.annee ?? ''),
-      ].join('|');
-      if (!acc[key] || b.quantite > acc[key].quantite) acc[key] = b;
-      return acc;
-    }, {})
-  );
-
-  // ── Scorer toutes les bouteilles disponibles ─────────────────────────────────
-  const scored = deduped
+  // ── Scorer toutes les bouteilles disponibles (déjà dédupliquées) ─────────────
+  const scored = available
     .map(b => ({ bottle: b, ...scoreBottle(b, pairing) }))
     .filter(x => x.score >= 8)
     .sort((a, b) => b.score - a.score);

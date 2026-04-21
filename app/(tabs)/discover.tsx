@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Alert, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
-import { useWishlistStore, useBottleStore } from '../../src/stores';
+import { useWishlistStore, useBottleStore, useCavesStore } from '../../src/stores';
 import { bottlesApi } from '../../src/api';
 import { Input, Button, WineBadge, StarRating } from '../../src/components/ui';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -31,7 +31,16 @@ const QUICK_SUGGESTIONS = ['Entrecôte', 'Saumon', 'Huîtres', 'Foie gras', 'Fro
 
 export default function DiscoverScreen() {
   const { bottles, fetchBottles } = useBottleStore();
+  const { caves, activeLieu } = useCavesStore();
   const { items, isLoading, fetchItems, addItem, deleteItem, markPurchased } = useWishlistStore();
+
+  // Bouteilles filtrées par lieu actif pour les accords mets-vins
+  const bottlesInLieu = useMemo(() => {
+    if (!activeLieu) return bottles;
+    const caveNames = caves.filter(c => c.location === activeLieu).map(c => c.name);
+    if (!caveNames.length) return bottles;
+    return bottles.filter(b => caveNames.includes(b.cave ?? ''));
+  }, [bottles, caves, activeLieu]);
   const [activeTab, setActiveTab] = useState<Tab>('Accords & plats');
 
   // Accords
@@ -92,7 +101,7 @@ export default function DiscoverScreen() {
     const q = query ?? plat;
     if (!q.trim()) return;
     setPlat(q);
-    const results = getRecommendations(bottles, q);
+    const results = getRecommendations(bottlesInLieu, q);
     setRecoResult(results);
     setHasSearched(true);
   };

@@ -34,10 +34,23 @@ export default function DashboardScreen() {
     });
   }, [caves, bottles]);
 
-  const favorites  = useMemo(() => bottles.filter(b => b.isFavorite).slice(0, 3), [bottles]);
-  const recent     = useMemo(() => [...bottles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottles]);
-  const urgentList = useMemo(() => bottles.filter(b => isUrgent(b) && b.quantite > 0), [bottles]);
-  const lowStock   = useMemo(() => bottles.filter(b => b.quantite === 1 && !isUrgent(b)), [bottles]);
+  // Noms des caves du lieu actif — null = pas de filtre (aucun lieu ou aucune cave)
+  const caveNamesInLieu = useMemo(() => {
+    if (!activeLieu) return null;
+    const names = caves.filter(c => c.location === activeLieu).map(c => c.name);
+    return names.length > 0 ? names : null;
+  }, [caves, activeLieu]);
+
+  // Bouteilles du lieu actif seulement
+  const bottlesInLieu = useMemo(
+    () => caveNamesInLieu ? bottles.filter(b => caveNamesInLieu.includes(b.cave ?? '')) : bottles,
+    [bottles, caveNamesInLieu]
+  );
+
+  const favorites  = useMemo(() => bottlesInLieu.filter(b => b.isFavorite).slice(0, 3), [bottlesInLieu]);
+  const recent     = useMemo(() => [...bottlesInLieu].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottlesInLieu]);
+  const urgentList = useMemo(() => bottlesInLieu.filter(b => isUrgent(b) && b.quantite > 0), [bottlesInLieu]);
+  const lowStock   = useMemo(() => bottlesInLieu.filter(b => b.quantite === 1 && !isUrgent(b)), [bottlesInLieu]);
 
   const firstName = user?.name?.split(' ')[0] ?? 'vous';
 

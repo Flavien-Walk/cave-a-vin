@@ -216,7 +216,7 @@ export default function AddScreen() {
         notePerso: notePerso > 0 ? { note: notePerso, texte: '' } : undefined,
         source: 'manual',
         cave, emplacement,
-      });
+      }, photoUri ?? undefined);
       resetForm();
       router.back();
     } catch (e: any) {

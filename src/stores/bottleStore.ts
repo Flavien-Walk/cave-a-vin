@@ -1,6 +1,52 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 import { bottlesApi, statsApi } from '../api';
 import type { Bottle, CreateBottleDto, UpdateBottleDto, CaveStats } from '../types';
+
+// ── Persistance locale des photos (expo-file-system + AsyncStorage) ───────────
+// Les photos prises lors du scan d'étiquette sont stockées dans le répertoire
+// documentDirectory de l'app (persistent entre les sessions, supprimé à la
+// désinstallation). La map bottleId → localPath est sauvegardée dans AsyncStorage.
+// Aucun chemin local n'est envoyé au backend : photoUrl backend reste réservé
+// aux URLs HTTP futures (ex. Cloudinary).
+
+const LOCAL_PHOTOS_KEY = 'cave_bottle_local_photos_v1';
+
+async function loadLocalPhotos(): Promise<Record<string, string>> {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_PHOTOS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function persistLocalPhotos(map: Record<string, string>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LOCAL_PHOTOS_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+async function savePhotoLocally(bottleId: string, sourceUri: string): Promise<string | null> {
+  try {
+    const dir = (FileSystem.documentDirectory ?? '') + 'bottle_photos/';
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    const dest = dir + bottleId + '.jpg';
+    await FileSystem.copyAsync({ from: sourceUri, to: dest });
+    return dest;
+  } catch {
+    return null;
+  }
+}
+
+async function deletePhotoLocally(path: string): Promise<void> {
+  try {
+    await FileSystem.deleteAsync(path, { idempotent: true });
+  } catch {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface BottleState {
   bottles: Bottle[];
@@ -8,10 +54,11 @@ interface BottleState {
   isLoading: boolean;
   isStatsLoading: boolean;
   error: string | null;
+  localPhotos: Record<string, string>; // bottleId → file:// URI
 
   fetchBottles: () => Promise<void>;
   fetchStats: () => Promise<void>;
-  addBottle: (data: CreateBottleDto) => Promise<void>;
+  addBottle: (data: CreateBottleDto, localPhotoUri?: string) => Promise<void>;
   updateBottle: (id: string, data: UpdateBottleDto) => Promise<void>;
   deleteBottle: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
@@ -33,12 +80,16 @@ export const useBottleStore = create<BottleState>((set, get) => ({
   isLoading: false,
   isStatsLoading: false,
   error: null,
+  localPhotos: {},
 
   fetchBottles: async () => {
     set({ isLoading: true, error: null });
     try {
-      const bottles = await bottlesApi.getAll();
-      set({ bottles, isLoading: false });
+      const [bottles, localPhotos] = await Promise.all([
+        bottlesApi.getAll(),
+        loadLocalPhotos(),
+      ]);
+      set({ bottles, localPhotos, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false, error: err.message });
     }
@@ -54,9 +105,18 @@ export const useBottleStore = create<BottleState>((set, get) => ({
     }
   },
 
-  addBottle: async (data) => {
+  addBottle: async (data, localPhotoUri?) => {
     const bottle = await bottlesApi.create(data);
     set(s => ({ bottles: [bottle, ...s.bottles] }));
+
+    if (localPhotoUri) {
+      const localPath = await savePhotoLocally(bottle._id, localPhotoUri);
+      if (localPath) {
+        const newMap = { ...get().localPhotos, [bottle._id]: localPath };
+        set({ localPhotos: newMap });
+        persistLocalPhotos(newMap); // fire-and-forget
+      }
+    }
   },
 
   updateBottle: async (id, data) => {
@@ -66,7 +126,12 @@ export const useBottleStore = create<BottleState>((set, get) => ({
 
   deleteBottle: async (id) => {
     await bottlesApi.remove(id);
-    set(s => ({ bottles: s.bottles.filter(b => b._id !== id) }));
+    const localPath = get().localPhotos[id];
+    if (localPath) deletePhotoLocally(localPath);
+    const newMap = { ...get().localPhotos };
+    delete newMap[id];
+    set(s => ({ bottles: s.bottles.filter(b => b._id !== id), localPhotos: newMap }));
+    if (localPath) persistLocalPhotos(newMap);
   },
 
   toggleFavorite: async (id) => {
