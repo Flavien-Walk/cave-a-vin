@@ -1,7 +1,12 @@
+const crypto               = require('crypto');
 const User                 = require('../models/User');
 const PendingVerification  = require('../models/PendingVerification');
 const { signToken }        = require('../middleware/auth');
 const { sendWelcomeEmail, sendResetCodeEmail, sendVerificationCodeEmail } = require('../services/emailService');
+
+// SHA-256 des codes OTP — défense en profondeur si la DB est compromise
+// (les codes expirent en 15 min et sont rate-limited, le hash ajoute une couche)
+const hashOtp = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
 
 // POST /api/auth/pre-register — envoie un code OTP avant création du compte
 exports.preRegister = async (req, res, next) => {
@@ -15,11 +20,12 @@ exports.preRegister = async (req, res, next) => {
     if (exists) return res.status(409).json({ message: 'Adresse e-mail déjà utilisée.' });
 
     const code      = String(Math.floor(100000 + Math.random() * 900000));
+    const codeHash  = hashOtp(code);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await PendingVerification.findOneAndUpdate(
       { email: normalizedEmail },
-      { code, expiresAt },
+      { code: codeHash, expiresAt },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
@@ -48,7 +54,7 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ message: 'Aucun code envoyé pour cet email. Recommencez depuis le début.' });
     if (pending.expiresAt < new Date())
       return res.status(400).json({ message: 'Code expiré. Demandez-en un nouveau.' });
-    if (pending.code !== String(code).trim())
+    if (pending.code !== hashOtp(String(code).trim()))
       return res.status(400).json({ message: 'Code incorrect.' });
 
     const exists = await User.findOne({ email: normalizedEmail });
@@ -117,9 +123,9 @@ exports.forgotPassword = async (req, res, next) => {
       return res.json({ message: 'Si cet email est enregistré, un code a été envoyé.' });
     }
 
-    // Code à 6 chiffres, expire dans 15 minutes
+    // Code à 6 chiffres, expire dans 15 minutes — stocké hashé (SHA-256)
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    user.resetCode       = code;
+    user.resetCode       = hashOtp(code);
     user.resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
@@ -145,7 +151,7 @@ exports.resetPassword = async (req, res, next) => {
     if (user.resetCodeExpiry < new Date())
       return res.status(400).json({ message: 'Code expiré. Demandez-en un nouveau.' });
 
-    if (user.resetCode !== String(code).trim())
+    if (user.resetCode !== hashOtp(String(code).trim()))
       return res.status(400).json({ message: 'Code incorrect.' });
 
     // Mise à jour du mot de passe + nettoyage du code

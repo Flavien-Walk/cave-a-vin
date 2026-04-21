@@ -20,6 +20,14 @@ const errorHandler = (err, _req, res, _next) => {
 
   if (process.env.NODE_ENV !== 'production') {
     console.error(err);
+  } else {
+    // En production : loguer sans stack trace dans les logs serveur
+    console.error(`[${new Date().toISOString()}] ${status} — ${err.message}`);
+  }
+
+  // Ne jamais exposer les détails internes d'une erreur 5xx en production
+  if (status >= 500 && process.env.NODE_ENV === 'production') {
+    return res.status(status).json({ message: 'Erreur serveur interne.' });
   }
 
   res.status(status).json({

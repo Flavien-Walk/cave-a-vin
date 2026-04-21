@@ -9,7 +9,8 @@ const owns = async (id, userId) => {
 // ── GET /api/bottles ─────────────────────────────────────────────────────────
 exports.getAll = async (req, res, next) => {
   try {
-    const bottles = await Bottle.find({ userId: req.userId }).sort({ createdAt: -1 });
+    // Limite à 2000 bouteilles — garde-fou scalabilité (pagination à prévoir si dépassement)
+    const bottles = await Bottle.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(2000);
     res.json(bottles);
   } catch (err) { next(err); }
 };
@@ -86,16 +87,33 @@ exports.drink = async (req, res, next) => {
   try {
     const bottle = await owns(req.params.id, req.userId);
     if (!bottle) return res.status(404).json({ message: 'Bouteille introuvable.' });
-    const qty = req.body.quantity || 1;
+
+    // Validation stricte de la quantité : entier positif entre 1 et 999
+    const rawQty = req.body.quantity;
+    const qty = rawQty === undefined ? 1 : parseInt(rawQty, 10);
+    if (!Number.isInteger(qty) || qty < 1 || qty > 999) {
+      return res.status(400).json({ message: 'La quantité doit être un entier entre 1 et 999.' });
+    }
+
     if (bottle.quantite < qty)
       return res.status(400).json({ message: `Stock insuffisant (${bottle.quantite} disponible).` });
+
+    // Validation de la date si fournie
+    let drinkDate = new Date();
+    if (req.body.date) {
+      drinkDate = new Date(req.body.date);
+      if (isNaN(drinkDate.getTime())) {
+        return res.status(400).json({ message: 'Date invalide.' });
+      }
+    }
+
     bottle.quantite -= qty;
     await bottle.save();
     const entry = await ConsumptionHistory.create({
       bottleId: bottle._id, userId: req.userId,
       quantity: qty, note: req.body.note,
       comment: req.body.comment, occasion: req.body.occasion,
-      date: req.body.date || new Date(),
+      date: drinkDate,
     });
     res.json({ bottle, entry });
   } catch (err) { next(err); }

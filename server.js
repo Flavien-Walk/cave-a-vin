@@ -11,10 +11,27 @@ const PORT = process.env.PORT || 3000;
 
 // ── Middleware ──────────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors({ origin: '*' }));
+
+// CORS : mobile apps n'ont pas d'origin header → toujours autorisées.
+// On restreint uniquement les origines browser connues pour limiter l'abus depuis le web.
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // mobile / curl / server-to-server
+    const allowed = [
+      'http://localhost:8081',
+      'http://localhost:19006',
+      'http://localhost:3000',
+    ];
+    if (allowed.includes(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  },
+  credentials: false,
+}));
+
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Limite à 1 Mo — scan-label passe par multer (multipart), pas par express.json
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/auth',     require('./src/routes/auth'));

@@ -10,7 +10,7 @@ const WishlistItemSchema = new mongoose.Schema({
   priorite:    { type: String, enum: ['haute', 'normale', 'basse'], default: 'normale' },
   prixCible:   { type: Number, min: 0 },
   note:        { type: String, trim: true, maxlength: 1000 },
-  url:         { type: String, trim: true },
+  url:         { type: String, trim: true, maxlength: 2048 },
   isPurchased: { type: Boolean, default: false },
   purchasedAt: { type: Date },
   userId: { type: require('mongoose').Schema.Types.ObjectId, ref: 'User', index: true },

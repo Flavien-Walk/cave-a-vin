@@ -7,8 +7,10 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
+// 30 jours : équilibre UX mobile (pas de reconnexion fréquente) / sécurité
+// (token volé valide max 30 jours vs 90). Sans refresh token, c'est le meilleur compromis.
 function signToken(userId) {
-  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: '90d' });
+  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 async function authMiddleware(req, res, next) {
