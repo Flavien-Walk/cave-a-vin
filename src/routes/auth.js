@@ -6,7 +6,7 @@ const { authMiddleware } = require('../middleware/auth');
 // 10 tentatives par IP par 15 minutes sur les routes sensibles
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Trop de tentatives. Réessayez dans 15 minutes.' },
@@ -15,7 +15,7 @@ const authLimiter = rateLimit({
 // 5 demandes par IP par heure pour l'envoi d'emails (anti-spam Brevo)
 const emailLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 5,
+  limit: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Trop de demandes d\'email. Réessayez dans 1 heure.' },
