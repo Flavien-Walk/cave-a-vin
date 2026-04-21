@@ -281,6 +281,7 @@ export default function AddScreen() {
         keyboardVerticalOffset={0}
       >
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={s.form}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
