@@ -38,7 +38,7 @@ const formatOptions: SelectOption[]  = FORMATS_BOUTEILLE.map(f => ({ label: f.la
 
 export default function AddScreen() {
   const { addBottle } = useBottleStore();
-  const { caves, activeCave, fetchCaves } = useCavesStore();
+  const { caves, activeCave, activeLieu, fetchCaves } = useCavesStore();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -82,8 +82,9 @@ export default function AddScreen() {
     if (activeCave && !cave) setCave(activeCave.name);
   }, [activeCave]);
 
-  // Caves avec leur lieu en contexte (ex : "Cave 1 — Lyon")
-  const caveOptions: SelectOption[] = caves.map(c => ({
+  // Caves filtrées par lieu actif — si aucun lieu sélectionné, toutes les caves
+  const filteredCaves = activeLieu ? caves.filter(c => c.location === activeLieu) : caves;
+  const caveOptions: SelectOption[] = filteredCaves.map(c => ({
     label: c.location ? `${c.name} — ${c.location}` : c.name,
     value: c.name,
   }));

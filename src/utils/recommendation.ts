@@ -181,8 +181,22 @@ export function getRecommendations(bottles: Bottle[], platText: string): Recomme
     };
   }
 
+  // ── Dédoublonner par (nom + producteur + annee) avant scoring ────────────────
+  // Garde l'entrée avec le stock le plus élevé (si égal, l'ordre de fetchBottles)
+  const deduped = Object.values(
+    available.reduce<Record<string, Bottle>>((acc, b) => {
+      const key = [
+        (b.nom ?? '').toLowerCase().trim(),
+        (b.producteur ?? '').toLowerCase().trim(),
+        String(b.annee ?? ''),
+      ].join('|');
+      if (!acc[key] || b.quantite > acc[key].quantite) acc[key] = b;
+      return acc;
+    }, {})
+  );
+
   // ── Scorer toutes les bouteilles disponibles ─────────────────────────────────
-  const scored = available
+  const scored = deduped
     .map(b => ({ bottle: b, ...scoreBottle(b, pairing) }))
     .filter(x => x.score >= 8)
     .sort((a, b) => b.score - a.score);

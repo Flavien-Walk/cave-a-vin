@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Shadow, Spacing, Typography } from '../../constants';
 import { getWineColorHex, getAverageNote, isNearUrgent, formatPrice } from '../../utils/bottle.utils';
@@ -20,15 +20,21 @@ export const BottleCard: React.FC<BottleCardProps> = ({ bottle, onPress, compact
   if (compact) {
     return (
       <TouchableOpacity style={grid.card} onPress={onPress} activeOpacity={0.85}>
-        {/* Bande couleur haute */}
-        <View style={[grid.colorStrip, { backgroundColor: colorHex }]}>
-          {bottle.isFavorite && (
-            <Ionicons name="heart" size={12} color={Colors.white} style={grid.heart} />
-          )}
-          {urgent && (
-            <View style={grid.urgentDot} />
-          )}
-        </View>
+        {/* Photo ou bande couleur */}
+        {bottle.photoUrl
+          ? (
+            <View style={[grid.colorStrip, { backgroundColor: colorHex }]}>
+              <Image source={{ uri: bottle.photoUrl }} style={grid.photo} resizeMode="cover" />
+              {bottle.isFavorite && <Ionicons name="heart" size={12} color={Colors.white} style={grid.heart} />}
+              {urgent && <View style={grid.urgentDot} />}
+            </View>
+          ) : (
+            <View style={[grid.colorStrip, { backgroundColor: colorHex }]}>
+              {bottle.isFavorite && <Ionicons name="heart" size={12} color={Colors.white} style={grid.heart} />}
+              {urgent && <View style={grid.urgentDot} />}
+            </View>
+          )
+        }
         <View style={grid.body}>
           <Text style={grid.name} numberOfLines={2}>{bottle.nom}</Text>
           {bottle.annee ? <Text style={grid.year}>{bottle.annee}</Text> : null}
@@ -57,7 +63,10 @@ export const BottleCard: React.FC<BottleCardProps> = ({ bottle, onPress, compact
       accessibilityRole="button"
       accessibilityLabel={`${bottle.nom}${bottle.annee ? ', ' + bottle.annee : ''}`}
     >
-      <View style={[list.colorBar, { backgroundColor: colorHex }]} />
+      {bottle.photoUrl
+        ? <Image source={{ uri: bottle.photoUrl }} style={list.photoThumb} resizeMode="cover" />
+        : <View style={[list.colorBar, { backgroundColor: colorHex }]} />
+      }
       <View style={list.body}>
         <View style={list.nameRow}>
           <Text style={list.name} numberOfLines={1}>{bottle.nom}</Text>
@@ -104,8 +113,9 @@ export const BottleCard: React.FC<BottleCardProps> = ({ bottle, onPress, compact
 // ── List mode styles ──────────────────────────────────────────────────────────
 
 const list = StyleSheet.create({
-  card:      { flexDirection: 'row', backgroundColor: Colors.champagne, borderRadius: Radius.lg, marginBottom: Spacing.sm, overflow: 'hidden', ...Shadow.sm },
-  colorBar:  { width: 5 },
+  card:       { flexDirection: 'row', backgroundColor: Colors.champagne, borderRadius: Radius.lg, marginBottom: Spacing.sm, overflow: 'hidden', ...Shadow.sm },
+  colorBar:   { width: 5 },
+  photoThumb: { width: 56, height: '100%' as any },
   body:      { flex: 1, padding: Spacing.md, gap: 3 },
   nameRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
   name:      { ...Typography.h4, flex: 1 },
@@ -127,7 +137,8 @@ const list = StyleSheet.create({
 
 const grid = StyleSheet.create({
   card:        { flex: 1, margin: 4, backgroundColor: Colors.champagne, borderRadius: Radius.lg, overflow: 'hidden', ...Shadow.sm, minHeight: 130 },
-  colorStrip:  { height: 36, position: 'relative' },
+  colorStrip:  { height: 80, position: 'relative' },
+  photo:       { ...StyleSheet.absoluteFillObject },
   heart:       { position: 'absolute', top: 6, right: 6 },
   urgentDot:   { position: 'absolute', top: 6, left: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.rougeAlerte },
   body:        { padding: Spacing.sm, gap: 4, flex: 1 },
