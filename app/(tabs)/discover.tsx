@@ -28,7 +28,7 @@ const SUGGESTIONS_CATEGORIES = [
 ] as const;
 
 export default function DiscoverScreen() {
-  const { bottles } = useBottleStore();
+  const { bottles, fetchBottles } = useBottleStore();
   const { items, isLoading, fetchItems, addItem, deleteItem, markPurchased } = useWishlistStore();
   const [activeTab, setActiveTab] = useState<Tab>('Accords & plats');
 
@@ -53,7 +53,7 @@ export default function DiscoverScreen() {
   const [wishNote, setWishNote]       = useState('');
   const [addLoading, setAddLoading]   = useState(false);
 
-  useEffect(() => { fetchItems(); }, []);
+  useEffect(() => { fetchItems(); fetchBottles(); }, []);
 
   useEffect(() => {
     if (activeTab === 'À boire bientôt') loadUrgents();
@@ -90,6 +90,12 @@ export default function DiscoverScreen() {
     const results = getRecommendations(bottles, q);
     setRecoResult(results);
     setHasSearched(true);
+  };
+
+  const clearSearch = () => {
+    setPlat('');
+    setRecoResult(null);
+    setHasSearched(false);
   };
 
   const handleAddWish = async () => {
@@ -141,10 +147,18 @@ export default function DiscoverScreen() {
                 placeholder="ex : entrecôte, saumon, foie gras…"
                 placeholderTextColor={Colors.brunClair}
                 value={plat}
-                onChangeText={setPlat}
+                onChangeText={text => {
+                  setPlat(text);
+                  if (!text.trim()) { setHasSearched(false); setRecoResult(null); }
+                }}
                 onSubmitEditing={() => searchAccords()}
                 returnKeyType="search"
               />
+              {plat.length > 0 && (
+                <TouchableOpacity style={s.searchClear} onPress={clearSearch}>
+                  <Ionicons name="close-circle" size={18} color={Colors.brunClair} />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={s.searchBtn} onPress={() => searchAccords()}>
                 <Ionicons name="search" size={18} color={Colors.white} />
               </TouchableOpacity>
@@ -153,6 +167,10 @@ export default function DiscoverScreen() {
             {/* Résultats */}
             {hasSearched && recoResult ? (
               <>
+                <TouchableOpacity style={s.backToSugg} onPress={clearSearch}>
+                  <Ionicons name="arrow-back" size={13} color={Colors.lieDeVin} />
+                  <Text style={s.backToSuggText}>Changer de plat</Text>
+                </TouchableOpacity>
                 {foodProfile && (
                   <View style={s.profileBadge}>
                     <Text style={s.profileText}>
@@ -532,9 +550,12 @@ const s = StyleSheet.create({
   tabTextActive: { color: Colors.white },
   content: { padding: Spacing.lg, paddingBottom: 120 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.brunMoka, marginBottom: Spacing.md },
-  searchRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-  searchInput: { flex: 1, backgroundColor: Colors.champagne, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.parchemin, paddingHorizontal: Spacing.md, fontSize: 14, color: Colors.brunMoka, height: 48 },
-  searchBtn: { backgroundColor: Colors.lieDeVin, borderRadius: Radius.lg, width: 48, alignItems: 'center', justifyContent: 'center' },
+  searchRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md, alignItems: 'center' },
+  searchInput: { flex: 1, backgroundColor: Colors.champagne, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.parchemin, paddingHorizontal: Spacing.md, paddingRight: Spacing.xl, fontSize: 14, color: Colors.brunMoka, height: 44 },
+  searchClear: { position: 'absolute', right: 58, zIndex: 1 },
+  searchBtn: { backgroundColor: Colors.lieDeVin, borderRadius: Radius.lg, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  backToSugg: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: Spacing.md },
+  backToSuggText: { fontSize: 12, color: Colors.lieDeVin, fontWeight: '600' },
   profileBadge: { backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.sm, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.blancDore + '40' },
   profileText: { fontSize: 13, color: Colors.ambreChaud },
   resultsTitle:       { fontSize: 13, color: Colors.brunMoyen, marginBottom: Spacing.md, fontWeight: '600' },
@@ -545,10 +566,10 @@ const s = StyleSheet.create({
   messageText:        { fontSize: 13, color: Colors.brunMoyen, lineHeight: 18 },
   idealSuggestion:    { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin },
   idealSuggestionText:{ fontSize: 12, color: Colors.lieDeVin, flex: 1, lineHeight: 17 },
-  suggTitle:    { fontSize: 13, fontWeight: '700', color: Colors.brunMoyen, marginBottom: Spacing.md },
-  suggCat:      { marginBottom: Spacing.md },
-  suggCatLabel: { fontSize: 10, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: Spacing.sm },
-  suggCatRow:   { flexDirection: 'row', gap: Spacing.sm },
+  suggTitle:    { fontSize: 12, fontWeight: '700', color: Colors.brunMoyen, marginBottom: Spacing.sm },
+  suggCat:      { marginBottom: Spacing.sm },
+  suggCatLabel: { fontSize: 9, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 },
+  suggCatRow:   { flexDirection: 'row', gap: 6 },
   hintBanner:   { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, padding: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud, marginTop: Spacing.sm },
   hintText:     { flex: 1, fontSize: 12, color: Colors.brunMoyen, lineHeight: 17, fontStyle: 'italic' },
   urgentHeader:     { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.rougeAlerteLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.rougeAlerte },
@@ -561,9 +582,9 @@ const s = StyleSheet.create({
 });
 
 const chip = StyleSheet.create({
-  pill:       { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center' },
+  pill:       { paddingHorizontal: 11, paddingVertical: 5, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center' },
   active:     { backgroundColor: Colors.lieDeVin, borderColor: Colors.lieDeVin },
-  text:       { fontSize: 13, fontWeight: '600', color: Colors.brunMoyen },
+  text:       { fontSize: 12, fontWeight: '600', color: Colors.brunMoyen },
   textActive: { color: Colors.white },
 });
 
