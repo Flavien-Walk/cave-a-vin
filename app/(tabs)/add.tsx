@@ -7,14 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Colors, Spacing, Radius } from '../../src/constants';
+import { Colors, Spacing, Radius, API_URL } from '../../src/constants';
 import { COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../../src/constants';
 import { useBottleStore, useCavesStore } from '../../src/stores';
 import { Input, Button, SelectModal, StarRating } from '../../src/components/ui';
 import type { SelectOption } from '../../src/components/ui';
 import type { CouleurVin, FormatBouteille } from '../../src/types';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://cave-a-vin-kwx0.onrender.com';
 
 const STEP_LABELS = ['Identité', 'Détails', 'Cave'];
 

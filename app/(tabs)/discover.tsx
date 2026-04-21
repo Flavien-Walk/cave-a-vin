@@ -109,6 +109,7 @@ export default function DiscoverScreen() {
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Header compact */}
       <View style={s.header}>
+        <View style={s.headerAccent} />
         <Text style={s.title}>Découvrir</Text>
         <Text style={s.subtitle}>Accords, goûts & recommandations</Text>
       </View>
@@ -453,7 +454,7 @@ const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
 };
 
 const UrgentCard = ({ bottle }: { bottle: Bottle }) => (
-  <View style={urg.card}>
+  <TouchableOpacity style={urg.card} onPress={() => router.push(`/bottle/${bottle._id}` as any)} activeOpacity={0.8}>
     <View style={urg.left}>
       <Text style={urg.nom}>{bottle.nom}</Text>
       {bottle.producteur ? <Text style={urg.sub}>{bottle.producteur}</Text> : null}
@@ -468,7 +469,7 @@ const UrgentCard = ({ bottle }: { bottle: Bottle }) => (
         <Text style={urg.label}>limite</Text>
       </View>
     )}
-  </View>
+  </TouchableOpacity>
 );
 
 const WishCard = ({ item, purchased, onPurchase, onDelete }: {
@@ -477,7 +478,16 @@ const WishCard = ({ item, purchased, onPurchase, onDelete }: {
 }) => (
   <View style={[wc.card, purchased && wc.purchased]}>
     <View style={{ flex: 1 }}>
-      <Text style={[wc.nom, purchased && wc.strikethrough]}>{item.nom}</Text>
+      <View style={wc.nomRow}>
+        <Text style={[wc.nom, purchased && wc.strikethrough]} numberOfLines={1}>{item.nom}</Text>
+        {item.priorite && item.priorite !== 'normale' && (
+          <View style={[wc.prioBadge, item.priorite === 'haute' ? wc.prioBadgeHaute : wc.prioBadgeBasse]}>
+            <Text style={[wc.prioText, item.priorite === 'haute' ? wc.prioTextHaute : wc.prioTextBasse]}>
+              {item.priorite === 'haute' ? '↑ Haute' : '↓ Basse'}
+            </Text>
+          </View>
+        )}
+      </View>
       {item.note ? <Text style={wc.note}>{item.note}</Text> : null}
     </View>
     <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -495,9 +505,10 @@ const WishCard = ({ item, purchased, onPurchase, onDelete }: {
 
 const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: Colors.cremeIvoire },
-  header:  { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
-  title:   { fontSize: 26, fontWeight: '800', color: Colors.brunMoka },
-  subtitle:   { fontSize: 12, color: Colors.brunClair, marginTop: 2 },
+  header:       { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
+  headerAccent: { width: 28, height: 3, borderRadius: 2, backgroundColor: Colors.lieDeVin, marginBottom: 8 },
+  title:        { fontSize: 26, fontWeight: '800', color: Colors.brunMoka },
+  subtitle:     { fontSize: 12, color: Colors.brunClair, marginTop: 2 },
   tabsScroll: { maxHeight: 40 },
   tabsRow:    { paddingHorizontal: Spacing.lg, gap: Spacing.sm, flexDirection: 'row', alignItems: 'center' },
   tab:        { paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin },
@@ -573,11 +584,18 @@ const urg = StyleSheet.create({
 });
 
 const wc = StyleSheet.create({
-  card:        { backgroundColor: Colors.champagne, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: Colors.parchemin, ...Shadow.sm },
-  purchased:   { opacity: 0.5 },
-  nom:         { fontSize: 15, fontWeight: '700', color: Colors.brunMoka },
-  strikethrough:{ textDecorationLine: 'line-through' },
-  note:        { fontSize: 12, color: Colors.brunClair, fontStyle: 'italic', marginTop: 2 },
+  card:          { backgroundColor: Colors.champagne, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: Colors.parchemin, ...Shadow.sm },
+  purchased:     { opacity: 0.5 },
+  nomRow:        { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 1 },
+  nom:           { fontSize: 15, fontWeight: '700', color: Colors.brunMoka },
+  strikethrough: { textDecorationLine: 'line-through' },
+  note:          { fontSize: 12, color: Colors.brunClair, fontStyle: 'italic', marginTop: 2 },
+  prioBadge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.full },
+  prioBadgeHaute:{ backgroundColor: Colors.rougeAlerteLight },
+  prioBadgeBasse:{ backgroundColor: Colors.blancDoreLight },
+  prioText:      { fontSize: 10, fontWeight: '700' },
+  prioTextHaute: { color: Colors.rougeAlerte },
+  prioTextBasse: { color: Colors.ambreChaud },
 });
 
 // ── TasteRow ──

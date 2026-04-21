@@ -67,7 +67,7 @@ function computeInsights(stats: CaveStats, bottles: Bottle[]): Insight[] {
   if (rated.length >= 3) {
     const avg = rated.reduce((s, b) => s + b.notePerso!.note, 0) / rated.length;
     insights.push({ icon: 'star-outline', color: Colors.ambreChaud,
-      text: `Note moyenne ${avg.toFixed(1)}/10 sur ${rated.length} vin${rated.length > 1 ? 's' : ''} dégusté${rated.length > 1 ? 's' : ''}` });
+      text: `Note moyenne ${avg.toFixed(1)}/5 sur ${rated.length} vin${rated.length > 1 ? 's' : ''} dégusté${rated.length > 1 ? 's' : ''}` });
   }
 
   // 6. Diversité des millésimes
@@ -256,6 +256,7 @@ export default function StatsScreen() {
       >
         {/* Header */}
         <View style={s.header}>
+          <View style={s.headerAccent} />
           <Text style={s.title}>Analyse</Text>
           <Text style={s.subtitle}>Tableau de bord personnel</Text>
         </View>
@@ -383,7 +384,7 @@ export default function StatsScreen() {
                     <View style={[s.goûtDot, { backgroundColor: getWineColorHex(g.couleur) }]} />
                     <Text style={s.goûtLabel}>{WINE_LABELS[g.couleur] ?? g.couleur}</Text>
                     <View style={s.goûtStars}>
-                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                      {[1,2,3,4,5].map(n => (
                         <View key={n} style={[s.goûtBar, { backgroundColor: n <= Math.round(g.avg) ? Colors.ambreChaud : Colors.parchemin }]} />
                       ))}
                     </View>
@@ -553,7 +554,8 @@ const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.cremeIvoire },
   scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
 
-  header:   { marginBottom: Spacing.lg },
+  header:       { marginBottom: Spacing.lg },
+  headerAccent: { width: 28, height: 3, borderRadius: 2, backgroundColor: Colors.lieDeVin, marginBottom: 8 },
   title:    { fontSize: 26, fontWeight: '800', color: Colors.brunMoka, letterSpacing: -0.5 },
   subtitle: { ...Typography.caption, color: Colors.brunMoyen, marginTop: 3 },
 

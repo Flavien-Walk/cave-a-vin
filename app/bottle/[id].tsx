@@ -174,9 +174,14 @@ export default function BottleDetailScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.favoriteBtn} onPress={handleToggleFavorite} accessibilityLabel={bottle.isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}>
-          <Ionicons name={bottle.isFavorite ? 'heart' : 'heart-outline'} size={24} color={bottle.isFavorite ? Colors.rougeAlerte : Colors.white} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push(`/edit-bottle?id=${bottle._id}` as any)} accessibilityLabel="Modifier la bouteille">
+            <Ionicons name="pencil-outline" size={19} color={Colors.white} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleFavorite} accessibilityLabel={bottle.isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}>
+            <Ionicons name={bottle.isFavorite ? 'heart' : 'heart-outline'} size={22} color={bottle.isFavorite ? Colors.rougeAlerte : Colors.white} />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -429,7 +434,8 @@ const styles = StyleSheet.create({
   headerBadges:   { flexDirection: 'row', gap: 8, marginTop: Spacing.sm },
   avgBadge:       { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
   avgText:        { color: Colors.white, fontWeight: '700', fontSize: 13 },
-  favoriteBtn:    { position: 'absolute', top: Spacing.md, right: Spacing.lg, padding: Spacing.sm },
+  headerActions:  { position: 'absolute', top: Spacing.md, right: Spacing.lg, flexDirection: 'row', gap: 6 },
+  headerIconBtn:  { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
 
   scroll: { padding: Spacing.lg },
 
