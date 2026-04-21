@@ -24,20 +24,21 @@ export default function ResetPasswordScreen() {
   const inputRefs = useRef<Array<TextInput | null>>([null, null, null, null, null, null]);
 
   const handleCodeChange = (val: string, idx: number) => {
-    const clean = val.replace(/\D/g, '').slice(-1);
-    const next  = [...code];
-    next[idx]   = clean;
-    setCode(next);
-    if (clean && idx < 5) inputRefs.current[idx + 1]?.focus();
-    if (!clean && idx > 0) inputRefs.current[idx - 1]?.focus();
-  };
+    const digits = val.replace(/\D/g, '');
 
-  const handleCodePaste = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 6);
-    if (digits.length === 6) {
-      setCode(digits.split(''));
-      inputRefs.current[5]?.focus();
+    if (digits.length > 1) {
+      // Collage : distribuer chaque chiffre depuis la case 0
+      const next = ['', '', '', '', '', ''];
+      digits.slice(0, 6).split('').forEach((d, j) => { next[j] = d; });
+      setCode(next);
+      inputRefs.current[Math.min(digits.length, 5)]?.focus();
+      return;
     }
+
+    const next = [...code];
+    next[idx] = digits;
+    setCode(next);
+    if (digits && idx < 5) inputRefs.current[idx + 1]?.focus();
   };
 
   const fullCode = code.join('');
@@ -133,13 +134,7 @@ export default function ResetPasswordScreen() {
                     inputRefs.current[i - 1]?.focus();
                   }
                 }}
-                onChange={e => {
-                  // Detect paste
-                  const val = e.nativeEvent.text;
-                  if (val.length > 1) handleCodePaste(val);
-                }}
                 keyboardType="number-pad"
-                maxLength={1}
                 selectTextOnFocus
                 textAlign="center"
               />
