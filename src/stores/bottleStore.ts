@@ -89,11 +89,16 @@ export const useBottleStore = create<BottleState>((set, get) => ({
   fetchBottles: async () => {
     set({ isLoading: true, error: null });
     try {
-      const [bottles, localPhotos] = await Promise.all([
+      const [bottles, localPhotosFromStorage] = await Promise.all([
         bottlesApi.getAll(),
         loadLocalPhotos(),
       ]);
-      set({ bottles, localPhotos, isLoading: false });
+      // Keep freshest in-memory entries (e.g. just-created photos) while reloading storage.
+      const mergedLocalPhotos = {
+        ...localPhotosFromStorage,
+        ...get().localPhotos,
+      };
+      set({ bottles, localPhotos: mergedLocalPhotos, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false, error: err.message });
     }
@@ -118,7 +123,7 @@ export const useBottleStore = create<BottleState>((set, get) => ({
       if (localPath) {
         const newMap = { ...get().localPhotos, [bottle._id]: localPath };
         set({ localPhotos: newMap });
-        persistLocalPhotos(newMap); // fire-and-forget
+        await persistLocalPhotos(newMap);
       }
     }
   },
@@ -136,7 +141,7 @@ export const useBottleStore = create<BottleState>((set, get) => ({
       const newMap = { ...current };
       delete newMap[id];
       set({ localPhotos: newMap });
-      persistLocalPhotos(newMap);
+      await persistLocalPhotos(newMap);
     } else {
       // Remplacer/ajouter
       if (current[id]) deletePhotoLocally(current[id]);
@@ -144,7 +149,7 @@ export const useBottleStore = create<BottleState>((set, get) => ({
       if (localPath) {
         const newMap = { ...current, [id]: localPath };
         set({ localPhotos: newMap });
-        persistLocalPhotos(newMap);
+        await persistLocalPhotos(newMap);
       }
     }
   },
@@ -156,7 +161,7 @@ export const useBottleStore = create<BottleState>((set, get) => ({
     const newMap = { ...get().localPhotos };
     delete newMap[id];
     set(s => ({ bottles: s.bottles.filter(b => b._id !== id), localPhotos: newMap }));
-    if (localPath) persistLocalPhotos(newMap);
+    if (localPath) await persistLocalPhotos(newMap);
   },
 
   toggleFavorite: async (id) => {

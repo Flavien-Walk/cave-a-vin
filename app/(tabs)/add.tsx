@@ -87,6 +87,8 @@ export default function AddScreen() {
     fetchCaves().finally(() => setCavesLoaded(true));
   }, []);
 
+  const normalizeFormat = (value?: string) => normalizeWineStr(value ?? '');
+
   // Autocomplete : chercher parmi les bouteilles existantes
   useEffect(() => {
     const normQuery = normalizeWineStr(nom);
@@ -95,12 +97,19 @@ export default function AddScreen() {
       setShowSuggestions(false);
       return;
     }
-    // Dédupliquer par nom normalisé — une seule entrée par vin logique (dernier millésime en tête)
+    // Dédupliquer par identité produit logique (nom + année + format + producteur)
     const seen = new Set<string>();
     const matches = bottles.filter(b => {
       const normNom = normalizeWineStr(b.nom);
       if (!normNom.includes(normQuery)) return false;
-      const key = normNom + '\0' + normalizeWineStr(b.producteur);
+      const key =
+        normNom +
+        '\0' +
+        String(b.annee ?? '') +
+        '\0' +
+        normalizeFormat(b.format) +
+        '\0' +
+        normalizeWineStr(b.producteur);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -119,6 +128,7 @@ export default function AddScreen() {
 
     const normProd = normalizeWineStr(producteur);
     const typedYear = annee ? parseInt(annee, 10) : NaN;
+    const typedFormat = normalizeFormat(format);
     const normRegion = normalizeWineStr(region);
     const normApp = normalizeWineStr(appellation);
     const normCepage = normalizeWineStr(cepage);
@@ -150,6 +160,14 @@ export default function AddScreen() {
         score += 4;
       }
 
+      const bFormat = normalizeFormat(b.format);
+      if (typedFormat && bFormat) {
+        if (typedFormat === bFormat) score += 18;
+        else score -= 18;
+      } else if (bFormat) {
+        score += 3;
+      }
+
       if (normRegion && normalizeWineStr(b.region) === normRegion) score += 6;
       if (normApp && normalizeWineStr(b.appellation) === normApp) score += 6;
       if (normCepage && normalizeWineStr(b.cepage) === normCepage) score += 4;
@@ -169,7 +187,7 @@ export default function AddScreen() {
       score: best.score,
       reusablePhoto: best.reusablePhoto ?? null,
     };
-  }, [nom, producteur, annee, region, appellation, cepage, bottles, localPhotos]);
+  }, [nom, producteur, annee, format, region, appellation, cepage, bottles, localPhotos]);
 
   useEffect(() => {
     if (!similarSuggestion) {
@@ -186,13 +204,14 @@ export default function AddScreen() {
     setNom(b.nom ?? '');
     setProducteur(b.producteur ?? '');
     setCouleur((b.couleur ?? '') as CouleurVin | '');
-    // Ne pas pré-remplir le millésime — l'utilisateur ajoute potentiellement un autre millésime
+    setAnnee(b.annee ? String(b.annee) : '');
+    setFormat((b.format as FormatBouteille) ?? '');
     setRegion(b.region ?? '');
     setAppellation(b.appellation ?? '');
     setPays(b.pays ?? 'France');
     setCepage(b.cepage ?? '');
-    // Réutiliser la photo si disponible
-    const existingPhoto = localPhotos[b._id];
+    // Réutiliser la photo locale sinon la photo backend déjà liée à la bouteille
+    const existingPhoto = localPhotos[b._id] ?? b.photoUrl ?? null;
     if (existingPhoto && !photoUri) setPhotoUri(existingPhoto);
     setSuggestions([]);
     setShowSuggestions(false);
@@ -308,6 +327,7 @@ export default function AddScreen() {
     setProducteur(b.producteur ?? '');
     setCouleur((b.couleur as CouleurVin) ?? '');
     setAnnee(b.annee ? String(b.annee) : '');
+    setFormat((b.format as FormatBouteille) ?? '');
     setRegion(b.region ?? '');
     setAppellation(b.appellation ?? '');
     setPays(b.pays ?? 'France');
@@ -384,7 +404,9 @@ export default function AddScreen() {
           <Ionicons name="arrow-back" size={20} color={Colors.brunMoka} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Ajouter une bouteille</Text>
-        <View style={{ width: 36 }} />
+        <View style={s.headerRightSlot}>
+          {step > 0 && <Text style={s.stepBackHint}>Retour étape</Text>}
+        </View>
       </View>
 
       {/* Stepper */}
@@ -484,7 +506,7 @@ export default function AddScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.suggestNom} numberOfLines={1}>{b.nom}</Text>
                         <Text style={s.suggestSub} numberOfLines={1}>
-                          {[b.producteur, b.couleur, b.annee].filter(Boolean).join(' · ')}
+                          {[b.producteur, b.couleur, b.annee, b.format].filter(Boolean).join(' · ')}
                         </Text>
                       </View>
                       <View style={s.suggestFill}>
@@ -711,6 +733,8 @@ const s = StyleSheet.create({
   header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.parchemin, backgroundColor: Colors.champagne },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: Colors.brunMoka },
+  headerRightSlot: { width: 84, alignItems: 'flex-end' },
+  stepBackHint: { fontSize: 11, fontWeight: '600', color: Colors.brunClair },
   stepperRow:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, backgroundColor: Colors.champagne, borderBottomWidth: 1, borderBottomColor: Colors.parchemin },
   stepItem:        { alignItems: 'center', gap: 4 },
   stepDot:         { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },

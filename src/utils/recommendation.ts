@@ -59,16 +59,22 @@ export function normalizeWineStr(s: string | undefined): string {
     .replace(/\s+/g, ' ');
 }
 
+function normalizeFormat(format: string | undefined): string {
+  return normalizeWineStr(format);
+}
+
 // ── Identité produit ──────────────────────────────────────────────────────────
 //
 // Deux occurrences représentent le même vin logique si :
 //   • nom normalisé identique
 //   • millésime identique (ou tous deux absents)
+//   • format/contenance identique (ou tous deux absents)
 //   • producteur compatible (même valeur normalisée, ou l'un des deux est vide)
 //
 // Cave et emplacement ne font PAS partie de l'identité produit.
 // Un vin réparti dans plusieurs caves reste un seul vin logique.
 // Deux millésimes différents = deux produits distincts → jamais regroupés.
+// Deux formats différents = deux produits distincts → jamais regroupés.
 
 function metaScore(b: Bottle): number {
   return (b.region ? 1 : 0) + (b.appellation ? 1 : 0) + (b.cepage ? 1 : 0) + (b.couleur ? 1 : 0);
@@ -89,10 +95,10 @@ interface BottleGroup {
 }
 
 function groupBottles(bottles: Bottle[]): BottleGroup[] {
-  // Niveau 1 : grouper par nom normalisé + millésime
+  // Niveau 1 : grouper par nom normalisé + millésime + format
   const level1 = new Map<string, Bottle[]>();
   for (const b of bottles) {
-    const key = normalizeWineStr(b.nom) + '\0' + String(b.annee ?? '');
+    const key = normalizeWineStr(b.nom) + '\0' + String(b.annee ?? '') + '\0' + normalizeFormat(b.format);
     const arr = level1.get(key) ?? [];
     arr.push(b);
     level1.set(key, arr);
