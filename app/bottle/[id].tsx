@@ -73,7 +73,7 @@ export default function BottleDetailScreen() {
   const urgent     = isNearUrgent(bottle);
   const gradient   = getWineGradient(bottle.couleur);
   const formatLabel = FORMATS_BOUTEILLE.find(f => f.value === bottle.format)?.label ?? bottle.format;
-  const localPhoto = id ? (localPhotos[id] ?? null) : null;
+  const effectivePhoto = localPhotos[bottle._id] ?? bottle.photoUrl;
 
   const handleToggleFavorite = async () => {
     await toggleFavorite(bottle._id);
@@ -160,10 +160,6 @@ export default function BottleDetailScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerContent}>
-          {/* Photo locale si disponible */}
-          {localPhoto && (
-            <Image source={{ uri: localPhoto }} style={styles.headerPhoto} />
-          )}
           <Text style={styles.nom} numberOfLines={2}>{bottle.nom}</Text>
           {bottle.producteur ? <Text style={styles.producteur}>{bottle.producteur}</Text> : null}
           {bottle.annee ? <Text style={styles.annee}>{bottle.annee}</Text> : null}
@@ -190,6 +186,12 @@ export default function BottleDetailScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {effectivePhoto && (
+          <View style={styles.photoCard}>
+            <Image source={{ uri: effectivePhoto }} style={styles.photo} resizeMode="cover" />
+            <Text style={styles.photoCaption}>Photo de référence</Text>
+          </View>
+        )}
 
         {/* ── Alerte urgence ── */}
         {urgent && bottle.quantite > 0 && (
@@ -433,7 +435,6 @@ const styles = StyleSheet.create({
   gradientHeader: { paddingTop: Spacing.md, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, position: 'relative' },
   backBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
   headerContent:  { gap: 4 },
-  headerPhoto:    { width: 64, height: 80, borderRadius: Radius.sm, marginBottom: Spacing.sm, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
   nom:            { ...Typography.h1, color: Colors.white },
   producteur:     { ...Typography.body, color: 'rgba(255,255,255,0.85)', fontStyle: 'italic' },
   annee:          { fontSize: 28, fontWeight: '300', color: 'rgba(255,255,255,0.7)' },
@@ -444,6 +445,9 @@ const styles = StyleSheet.create({
   headerIconBtn:  { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
 
   scroll: { padding: Spacing.lg },
+  photoCard: { backgroundColor: Colors.champagne, borderRadius: Radius.xl, overflow: 'hidden', marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin, ...Shadow.sm },
+  photo: { width: '100%', height: 220, backgroundColor: Colors.parchemin },
+  photoCaption: { fontSize: 11, color: Colors.brunClair, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.parchemin },
 
   urgentBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.rougeAlerteLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.rougeAlerte + '30' },
   urgentText:   { ...Typography.bodySmall, color: Colors.rougeAlerte, fontWeight: '600', flex: 1 },

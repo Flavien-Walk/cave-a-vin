@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Image,
@@ -76,8 +76,8 @@ export default function AddScreen() {
   const [cave, setCave]             = useState('');
   const [emplacement, setEmplacement] = useState('');
 
-  // Suggestion réutilisation photo
-  const [suggestedPhoto, setSuggestedPhoto] = useState<{ uri: string; bottleNom: string } | null>(null);
+  // Suggestion bouteille similaire (métadonnées + photo)
+  const [suggestedBottleId, setSuggestedBottleId] = useState<string | null>(null);
 
   // Autocomplete : suggestions de vins existants
   const [suggestions, setSuggestions]       = useState<typeof bottles>([]);
@@ -113,21 +113,73 @@ export default function AddScreen() {
     if (activeCave && !cave) setCave(activeCave.name);
   }, [activeCave]);
 
-  // Détection de photo réutilisable (même logique métier que recommendation.ts)
-  useEffect(() => {
+  const similarSuggestion = useMemo(() => {
     const normNom = normalizeWineStr(nom);
-    if (normNom.length < 3 || photoUri) { setSuggestedPhoto(null); return; }
+    if (normNom.length < 3) return null;
+
     const normProd = normalizeWineStr(producteur);
-    const normAnnee = annee.trim();
-    const match = bottles.find(b => {
-      if (normalizeWineStr(b.nom) !== normNom) return false;
-      if (normAnnee && b.annee && String(b.annee) !== normAnnee) return false;
+    const typedYear = annee ? parseInt(annee, 10) : NaN;
+    const normRegion = normalizeWineStr(region);
+    const normApp = normalizeWineStr(appellation);
+    const normCepage = normalizeWineStr(cepage);
+
+    const scored = bottles.map(b => {
+      const bNom = normalizeWineStr(b.nom);
+      if (!bNom) return { bottle: b, score: -1 };
+
+      let score = 0;
+      const exactName = bNom === normNom;
+      const closeName = !exactName && (bNom.includes(normNom) || normNom.includes(bNom));
+      if (exactName) score += 55;
+      else if (closeName) score += 35;
+      else return { bottle: b, score: -1 };
+
       const bProd = normalizeWineStr(b.producteur);
-      if (normProd && bProd && bProd !== normProd) return false;
-      return !!localPhotos[b._id];
-    });
-    setSuggestedPhoto(match ? { uri: localPhotos[match._id], bottleNom: match.nom ?? nom } : null);
-  }, [nom, producteur, annee, photoUri, bottles, localPhotos]);
+      if (normProd && bProd) {
+        if (normProd === bProd) score += 20;
+        else if (normProd.includes(bProd) || bProd.includes(normProd)) score += 10;
+        else score -= 10;
+      }
+
+      if (!Number.isNaN(typedYear) && b.annee) {
+        const yearDelta = Math.abs(b.annee - typedYear);
+        if (yearDelta === 0) score += 20;
+        else if (yearDelta <= 2) score += 10;
+        else score -= 15;
+      } else if (b.annee) {
+        score += 4;
+      }
+
+      if (normRegion && normalizeWineStr(b.region) === normRegion) score += 6;
+      if (normApp && normalizeWineStr(b.appellation) === normApp) score += 6;
+      if (normCepage && normalizeWineStr(b.cepage) === normCepage) score += 4;
+
+      const reusablePhoto = localPhotos[b._id] ?? b.photoUrl ?? null;
+      if (reusablePhoto) score += 4;
+
+      return { bottle: b, score, reusablePhoto };
+    })
+      .filter(x => x.score >= 60)
+      .sort((a, b) => b.score - a.score);
+
+    if (!scored.length) return null;
+    const best = scored[0];
+    return {
+      bottle: best.bottle,
+      score: best.score,
+      reusablePhoto: best.reusablePhoto ?? null,
+    };
+  }, [nom, producteur, annee, region, appellation, cepage, bottles, localPhotos]);
+
+  useEffect(() => {
+    if (!similarSuggestion) {
+      setSuggestedBottleId(null);
+      return;
+    }
+    if (suggestedBottleId === null || suggestedBottleId !== similarSuggestion.bottle._id) {
+      setSuggestedBottleId(similarSuggestion.bottle._id);
+    }
+  }, [similarSuggestion, suggestedBottleId]);
 
   // Pré-remplir le formulaire depuis une bouteille existante sélectionnée
   const applySuggestion = (b: typeof bottles[number]) => {
@@ -245,8 +297,25 @@ export default function AddScreen() {
     setQuantite('1'); setFormat(''); setPrixAchat(''); setConsommerAvant('');
     setLieuAchat(''); setDescription(''); setNotePerso(0);
     setCave(''); setEmplacement('');
-    setPhotoUri(null); setScanResult(null); setSuggestedPhoto(null);
+    setPhotoUri(null); setScanResult(null); setSuggestedBottleId(null);
     setSuggestions([]); setShowSuggestions(false);
+  };
+
+  const applySimilarBottle = () => {
+    if (!similarSuggestion) return;
+    const b = similarSuggestion.bottle;
+    setNom(b.nom ?? '');
+    setProducteur(b.producteur ?? '');
+    setCouleur((b.couleur as CouleurVin) ?? '');
+    setAnnee(b.annee ? String(b.annee) : '');
+    setRegion(b.region ?? '');
+    setAppellation(b.appellation ?? '');
+    setPays(b.pays ?? 'France');
+    setCepage(b.cepage ?? '');
+    if (!photoUri && similarSuggestion.reusablePhoto) {
+      setPhotoUri(similarSuggestion.reusablePhoto);
+    }
+    setSuggestedBottleId(b._id);
   };
 
   const handleSave = async () => {
@@ -432,15 +501,28 @@ export default function AddScreen() {
 
               <Input label="Producteur / Domaine" value={producteur} onChangeText={setProducteur} placeholder="ex : Château du Barry" />
 
-              {/* Suggestion réutilisation photo */}
-              {suggestedPhoto && !photoUri && (
+              {/* Suggestion bouteille similaire */}
+              {similarSuggestion && (
                 <View style={s.photoSuggestion}>
-                  <Image source={{ uri: suggestedPhoto.uri }} style={s.photoSuggThumb} />
-                  <Text style={s.photoSuggText} numberOfLines={2}>
-                    Réutiliser la photo de « {suggestedPhoto.bottleNom} »
-                  </Text>
-                  <TouchableOpacity style={s.photoSuggBtn} onPress={() => setPhotoUri(suggestedPhoto.uri)}>
-                    <Text style={s.photoSuggBtnText}>Réutiliser</Text>
+                  {similarSuggestion.reusablePhoto ? (
+                    <Image source={{ uri: similarSuggestion.reusablePhoto }} style={s.photoSuggThumb} />
+                  ) : (
+                    <View style={s.photoSuggThumbFallback}>
+                      <Ionicons name="wine-outline" size={16} color={Colors.ambreChaud} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.photoSuggText} numberOfLines={2}>
+                      Bouteille similaire trouvée : « {similarSuggestion.bottle.nom} »
+                    </Text>
+                    <Text style={s.photoSuggSub}>
+                      Correspondance {similarSuggestion.score}% · pré-remplissage + photo
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={s.photoSuggBtn} onPress={applySimilarBottle}>
+                    <Text style={s.photoSuggBtnText}>
+                      {suggestedBottleId === similarSuggestion.bottle._id ? 'Appliqué' : 'Utiliser'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -629,9 +711,6 @@ const s = StyleSheet.create({
   header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.parchemin, backgroundColor: Colors.champagne },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: Colors.brunMoka },
-  scanBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: Colors.lieDeVin + '40' },
-  scanBtnText: { fontSize: 13, fontWeight: '700', color: Colors.lieDeVin },
-
   stepperRow:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, backgroundColor: Colors.champagne, borderBottomWidth: 1, borderBottomColor: Colors.parchemin },
   stepItem:        { alignItems: 'center', gap: 4 },
   stepDot:         { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
@@ -663,7 +742,9 @@ const s = StyleSheet.create({
   // Suggestion réutilisation photo
   photoSuggestion: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.ambreChaudLight, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.ambreChaud + '40', padding: Spacing.sm, marginBottom: Spacing.md },
   photoSuggThumb:  { width: 36, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.parchemin },
+  photoSuggThumbFallback: { width: 36, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
   photoSuggText:   { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
+  photoSuggSub:    { fontSize: 10, color: Colors.brunClair, marginTop: 2 },
   photoSuggBtn:    { backgroundColor: Colors.ambreChaud, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 6 },
   photoSuggBtnText:{ fontSize: 12, fontWeight: '700', color: Colors.white },
 

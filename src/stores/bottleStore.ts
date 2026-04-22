@@ -30,6 +30,9 @@ async function persistLocalPhotos(map: Record<string, string>): Promise<void> {
 
 async function savePhotoLocally(bottleId: string, sourceUri: string): Promise<string | null> {
   try {
+    // URL distante déjà exploitable telle quelle (ex: backend / cloud).
+    if (/^https?:\/\//i.test(sourceUri)) return sourceUri;
+
     const dir = (FileSystem.documentDirectory ?? '') + 'bottle_photos/';
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     const dest = dir + bottleId + '.jpg';
