@@ -79,9 +79,35 @@ export default function AddScreen() {
   // Suggestion réutilisation photo
   const [suggestedPhoto, setSuggestedPhoto] = useState<{ uri: string; bottleNom: string } | null>(null);
 
+  // Autocomplete : suggestions de vins existants
+  const [suggestions, setSuggestions]       = useState<typeof bottles>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   useEffect(() => {
     fetchCaves().finally(() => setCavesLoaded(true));
   }, []);
+
+  // Autocomplete : chercher parmi les bouteilles existantes
+  useEffect(() => {
+    const normQuery = normalizeWineStr(nom);
+    if (normQuery.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    // Dédupliquer par nom normalisé — une seule entrée par vin logique (dernier millésime en tête)
+    const seen = new Set<string>();
+    const matches = bottles.filter(b => {
+      const normNom = normalizeWineStr(b.nom);
+      if (!normNom.includes(normQuery)) return false;
+      const key = normNom + '\0' + normalizeWineStr(b.producteur);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 6);
+    setSuggestions(matches);
+    setShowSuggestions(matches.length > 0 && !photoUri);
+  }, [nom, bottles, photoUri]);
 
   useEffect(() => {
     if (activeCave && !cave) setCave(activeCave.name);
@@ -102,6 +128,23 @@ export default function AddScreen() {
     });
     setSuggestedPhoto(match ? { uri: localPhotos[match._id], bottleNom: match.nom ?? nom } : null);
   }, [nom, producteur, annee, photoUri, bottles, localPhotos]);
+
+  // Pré-remplir le formulaire depuis une bouteille existante sélectionnée
+  const applySuggestion = (b: typeof bottles[number]) => {
+    setNom(b.nom ?? '');
+    setProducteur(b.producteur ?? '');
+    setCouleur((b.couleur ?? '') as CouleurVin | '');
+    // Ne pas pré-remplir le millésime — l'utilisateur ajoute potentiellement un autre millésime
+    setRegion(b.region ?? '');
+    setAppellation(b.appellation ?? '');
+    setPays(b.pays ?? 'France');
+    setCepage(b.cepage ?? '');
+    // Réutiliser la photo si disponible
+    const existingPhoto = localPhotos[b._id];
+    if (existingPhoto && !photoUri) setPhotoUri(existingPhoto);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
 
   const filteredCaves = activeLieu ? caves.filter(c => c.location === activeLieu) : caves;
   const caveOptions: SelectOption[] = filteredCaves.map(c => ({
@@ -203,6 +246,7 @@ export default function AddScreen() {
     setLieuAchat(''); setDescription(''); setNotePerso(0);
     setCave(''); setEmplacement('');
     setPhotoUri(null); setScanResult(null); setSuggestedPhoto(null);
+    setSuggestions([]); setShowSuggestions(false);
   };
 
   const handleSave = async () => {
@@ -346,8 +390,47 @@ export default function AddScreen() {
                 </View>
               )}
 
-              <Input label="Nom du vin" value={nom} onChangeText={setNom} required placeholder="ex : Château Margaux" />
-              <Input label="Producteur / Domaine" value={producteur} onChangeText={setProducteur} placeholder="ex : Château Margaux" />
+              <Input
+                label="Nom du vin"
+                value={nom}
+                onChangeText={v => { setNom(v); }}
+                required
+                placeholder="ex : Château du Barry"
+              />
+
+              {/* ── Autocomplete suggestions ── */}
+              {showSuggestions && suggestions.length > 0 && (
+                <View style={s.suggestBox}>
+                  <Text style={s.suggestTitle}>Vins existants dans votre cave</Text>
+                  {suggestions.map(b => (
+                    <TouchableOpacity
+                      key={b._id}
+                      style={s.suggestRow}
+                      onPress={() => applySuggestion(b)}
+                      activeOpacity={0.75}
+                    >
+                      {localPhotos[b._id] && (
+                        <Image source={{ uri: localPhotos[b._id] }} style={s.suggestThumb} />
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.suggestNom} numberOfLines={1}>{b.nom}</Text>
+                        <Text style={s.suggestSub} numberOfLines={1}>
+                          {[b.producteur, b.couleur, b.annee].filter(Boolean).join(' · ')}
+                        </Text>
+                      </View>
+                      <View style={s.suggestFill}>
+                        <Ionicons name="arrow-forward" size={13} color={Colors.lieDeVin} />
+                        <Text style={s.suggestFillText}>Utiliser</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity style={s.suggestDismiss} onPress={() => setShowSuggestions(false)}>
+                    <Text style={s.suggestDismissText}>Ignorer les suggestions</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <Input label="Producteur / Domaine" value={producteur} onChangeText={setProducteur} placeholder="ex : Château du Barry" />
 
               {/* Suggestion réutilisation photo */}
               {suggestedPhoto && !photoUri && (
@@ -588,6 +671,18 @@ const s = StyleSheet.create({
   footer:       { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
   notePersoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
   notePersoLabel:{ fontSize: 14, fontWeight: '600', color: Colors.brunMoyen, flex: 1 },
+
+  // Autocomplete
+  suggestBox:         { backgroundColor: Colors.champagne, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.lieDeVin + '30', marginBottom: Spacing.md, overflow: 'hidden' },
+  suggestTitle:       { fontSize: 10, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 6 },
+  suggestRow:         { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: 10, borderTopWidth: 0.5, borderTopColor: Colors.parchemin },
+  suggestThumb:       { width: 32, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.parchemin },
+  suggestNom:         { fontSize: 13, fontWeight: '700', color: Colors.brunMoka },
+  suggestSub:         { fontSize: 11, color: Colors.brunClair, marginTop: 1 },
+  suggestFill:        { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 4 },
+  suggestFillText:    { fontSize: 11, fontWeight: '700', color: Colors.lieDeVin },
+  suggestDismiss:     { alignItems: 'center', paddingVertical: Spacing.sm, borderTopWidth: 0.5, borderTopColor: Colors.parchemin },
+  suggestDismissText: { fontSize: 11, color: Colors.brunClair },
 
   // Guard aucune cave
   noCaveContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.lg },

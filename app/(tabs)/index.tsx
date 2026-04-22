@@ -131,34 +131,6 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* ── Actions rapides ── */}
-        <View style={s.actionsRow}>
-          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/add')} activeOpacity={0.8}>
-            <View style={s.actionIcon}>
-              <Ionicons name="add" size={20} color={Colors.lieDeVin} />
-            </View>
-            <Text style={s.actionLabel}>Ajouter</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/cave')} activeOpacity={0.8}>
-            <View style={s.actionIcon}>
-              <Ionicons name="wine-outline" size={20} color={Colors.lieDeVin} />
-            </View>
-            <Text style={s.actionLabel}>Ma cave</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/discover')} activeOpacity={0.8}>
-            <View style={s.actionIcon}>
-              <Ionicons name="compass-outline" size={20} color={Colors.lieDeVin} />
-            </View>
-            <Text style={s.actionLabel}>Découvrir</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/stats')} activeOpacity={0.8}>
-            <View style={s.actionIcon}>
-              <Ionicons name="stats-chart-outline" size={20} color={Colors.lieDeVin} />
-            </View>
-            <Text style={s.actionLabel}>Stats</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* ── Lieu actif + switch ── */}
         {caves.length > 0 && lieuEntries.length > 1 && (
           <TouchableOpacity
@@ -282,12 +254,6 @@ const s = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
   statValue:   { fontSize: 18, fontWeight: '800', color: Colors.white, letterSpacing: -0.3 },
   statLabel:   { fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
-
-  // Actions rapides
-  actionsRow:   { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-  actionBtn:    { flex: 1, alignItems: 'center', gap: 6 },
-  actionIcon:   { width: 48, height: 48, borderRadius: Radius.lg, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center', ...Shadow.sm },
-  actionLabel:  { fontSize: 11, fontWeight: '600', color: Colors.brunMoyen },
 
   // Lieu switch compact
   lieuSwitch:    { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 8, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin, alignSelf: 'flex-start' },
