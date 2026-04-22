@@ -1,9 +1,9 @@
 import type { Bottle } from '../types';
 import { detectFood, type FoodPairing } from '../data/foodWinePairings';
 
-// ── Types exportés (inchangés pour rétrocompat discover.tsx) ──────────────────
+// ── Types exportés ────────────────────────────────────────────────────────────
 
-export type FoodType = string; // gardé pour compatibilité — plus utilisé en interne
+export type FoodType = string;
 
 export interface FoodProfile {
   type: string;
@@ -12,7 +12,9 @@ export interface FoodProfile {
 }
 
 export interface WineRecommendation {
-  bottle: Bottle;
+  bottle: Bottle;          // représentant du groupe (meilleures métadonnées)
+  allOccurrences: Bottle[]; // toutes les occurrences physiques du même vin logique
+  totalQty: number;         // stock total agrégé (toutes caves)
   score: number;
   match: 'ideal' | 'bon' | 'compromis';
   explanation: string;
@@ -29,7 +31,6 @@ export interface RecommendationResult {
   foodLabel: string;
 }
 
-// Export rétrocompat
 export type { RecommendationResult as RecoResult };
 
 // ── Note utilisateur ──────────────────────────────────────────────────────────
@@ -45,94 +46,131 @@ function getUserNote(bottle: Bottle): number | null {
   return Math.round((notes.reduce((s, n) => s + n, 0) / notes.length) * 10) / 10;
 }
 
-// ── Déduplication métier — deux niveaux ─────────────────────────────────────
+// ── Normalisation ─────────────────────────────────────────────────────────────
+// "Château Margaux" → "chateau margaux"  (accents + casse + espaces)
+// Exportée pour être réutilisée dans add.tsx (même logique, même base métier).
+
+export function normalizeWineStr(s: string | undefined): string {
+  return (s ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+// ── Identité produit ──────────────────────────────────────────────────────────
 //
-// Niveau 1 (clé primaire) : nom normalisé + millésime
-//   → regroupe toutes les entrées qui représentent logiquement le même vin
+// Deux occurrences représentent le même vin logique si :
+//   • nom normalisé identique
+//   • millésime identique (ou tous deux absents)
+//   • producteur compatible (même valeur normalisée, ou l'un des deux est vide)
 //
-// Niveau 2 (clé secondaire) : producteur
-//   → à l'intérieur d'un groupe nom+annee :
-//     • producteur vide  = "inconnu" → absorbé dans le meilleur producteur identifié
-//     • producteurs différents NON vides → vins genuinement différents (ex : même
-//       appellation, mais deux domaines distincts) → conservés séparément
-//
-// Ce design évite le faux doublon le plus fréquent :
-//   même bouteille saisie manuellement (sans producteur) + scannée (avec producteur)
-//   → une seule carte dans les recommandations.
-//
-// Critères de sélection au sein d'un groupe (par priorité décroissante) :
-//   1. Stock (plus fourni = plus utile à proposer)
-//   2. Note utilisateur
-//   3. Favori
-//   4. Richesse des métadonnées (région + appellation + cépage + couleur)
+// Cave et emplacement ne font PAS partie de l'identité produit.
+// Un vin réparti dans plusieurs caves reste un seul vin logique.
+// Deux millésimes différents = deux produits distincts → jamais regroupés.
 
 function metaScore(b: Bottle): number {
   return (b.region ? 1 : 0) + (b.appellation ? 1 : 0) + (b.cepage ? 1 : 0) + (b.couleur ? 1 : 0);
 }
 
 function selectBetter(a: Bottle, b: Bottle): Bottle {
-  if (a.quantite !== b.quantite)              return a.quantite > b.quantite ? a : b;
+  if (a.quantite !== b.quantite) return a.quantite > b.quantite ? a : b;
   const aN = getUserNote(a) ?? 0, bN = getUserNote(b) ?? 0;
-  if (aN !== bN)                              return aN > bN ? a : b;
-  if (a.isFavorite !== b.isFavorite)          return a.isFavorite ? a : b;
+  if (aN !== bN) return aN > bN ? a : b;
+  if (a.isFavorite !== b.isFavorite) return a.isFavorite ? a : b;
   return metaScore(a) >= metaScore(b) ? a : b;
 }
 
-function deduplicateBottles(bottles: Bottle[]): Bottle[] {
-  // Niveau 1 : grouper par nom + annee
-  const groups = new Map<string, Bottle[]>();
+interface BottleGroup {
+  representative: Bottle;
+  allOccurrences: Bottle[];
+  totalQty: number;
+}
+
+function groupBottles(bottles: Bottle[]): BottleGroup[] {
+  // Niveau 1 : grouper par nom normalisé + millésime
+  const level1 = new Map<string, Bottle[]>();
   for (const b of bottles) {
-    const key = (b.nom ?? '').toLowerCase().trim() + '\0' + String(b.annee ?? '');
-    const arr = groups.get(key) ?? [];
+    const key = normalizeWineStr(b.nom) + '\0' + String(b.annee ?? '');
+    const arr = level1.get(key) ?? [];
     arr.push(b);
-    groups.set(key, arr);
+    level1.set(key, arr);
   }
 
-  const result: Bottle[] = [];
+  const result: BottleGroup[] = [];
 
-  for (const group of groups.values()) {
-    if (group.length === 1) { result.push(group[0]); continue; }
+  for (const group of level1.values()) {
+    if (group.length === 1) {
+      result.push({ representative: group[0], allOccurrences: [group[0]], totalQty: group[0].quantite });
+      continue;
+    }
 
     // Niveau 2 : séparer avec / sans producteur
-    const withProd = new Map<string, Bottle>(); // producteur normalisé → meilleure entrée
-    let withoutProd: Bottle | null = null;       // meilleure entrée sans producteur
+    // • Producteur vide = entrée incomplète → absorbée dans le meilleur groupe identifié
+    // • Producteurs différents NON vides → vins genuinement différents (même appellation,
+    //   domaines distincts) → groupes séparés conservés
+    const withProd = new Map<string, Bottle[]>();
+    const withoutProd: Bottle[] = [];
 
     for (const b of group) {
-      const prod = (b.producteur ?? '').toLowerCase().trim();
+      const prod = normalizeWineStr(b.producteur);
       if (prod) {
-        const existing = withProd.get(prod);
-        withProd.set(prod, existing ? selectBetter(b, existing) : b);
+        const arr = withProd.get(prod) ?? [];
+        arr.push(b);
+        withProd.set(prod, arr);
       } else {
-        withoutProd = withoutProd ? selectBetter(b, withoutProd) : b;
+        withoutProd.push(b);
       }
     }
 
     if (withProd.size > 0) {
-      // Des entrées avec producteur existent — l'entrée sans producteur est le
-      // même vin saisi incompletement : on l'absorbe dans la meilleure entrée identifiée.
-      if (withoutProd) {
-        let bestKey = [...withProd.keys()][0];
-        for (const [k, v] of withProd) {
-          if (selectBetter(v, withProd.get(bestKey)!) === v) bestKey = k;
+      const prodGroups = [...withProd.entries()].map(([, bottles]) => ({
+        representative: bottles.reduce((a, b) => selectBetter(a, b)),
+        allOccurrences: [...bottles],
+      }));
+
+      // Absorber les entrées sans producteur dans le meilleur groupe
+      if (withoutProd.length > 0) {
+        let bestIdx = 0;
+        for (let i = 1; i < prodGroups.length; i++) {
+          if (selectBetter(prodGroups[i].representative, prodGroups[bestIdx].representative) === prodGroups[i].representative) {
+            bestIdx = i;
+          }
         }
-        withProd.set(bestKey, selectBetter(withoutProd, withProd.get(bestKey)!));
+        const best = prodGroups[bestIdx];
+        best.allOccurrences.push(...withoutProd);
+        for (const b of withoutProd) {
+          if (selectBetter(b, best.representative) === b) best.representative = b;
+        }
       }
-      result.push(...withProd.values());
+
+      for (const g of prodGroups) {
+        result.push({
+          representative: g.representative,
+          allOccurrences: g.allOccurrences,
+          totalQty: g.allOccurrences.reduce((s, b) => s + b.quantite, 0),
+        });
+      }
     } else {
-      // Uniquement des entrées sans producteur — déjà réduites à la meilleure
-      result.push(withoutProd!);
+      result.push({
+        representative: withoutProd.reduce((a, b) => selectBetter(a, b)),
+        allOccurrences: withoutProd,
+        totalQty: withoutProd.reduce((s, b) => s + b.quantite, 0),
+      });
     }
   }
 
   return result;
 }
 
-// ── Score d'une bouteille contre un accord ────────────────────────────────────
+// ── Score d'un groupe contre un accord mets-vins ──────────────────────────────
 
-function scoreBottle(
-  bottle: Bottle,
+function scoreGroup(
+  g: BottleGroup,
   pairing: FoodPairing,
 ): { score: number; match: 'ideal' | 'bon' | 'compromis'; explanation: string; factors: string[]; caveat?: string } {
+  const bottle = g.representative;
   const couleur = (bottle.couleur ?? '').toLowerCase().trim();
   const region  = (bottle.region  ?? '').toLowerCase().trim();
   const factors: string[] = [];
@@ -140,74 +178,62 @@ function scoreBottle(
   let baseScore = 0;
   let match: 'ideal' | 'bon' | 'compromis';
 
-  // ── 1. Accord couleur ────────────────────────────────────────────────────────
+  // 1. Accord couleur
   if (pairing.ideal.couleurs.includes(couleur)) {
     baseScore = 55;
     match     = 'ideal';
     factors.push('Accord classique avec ce plat');
-
-    // Bonus région préférée (+12)
     if (pairing.ideal.regionsPreferees?.length) {
       const pref = pairing.ideal.regionsPreferees.some(r =>
         region.includes(r.toLowerCase()) || r.toLowerCase().includes(region)
       );
-      if (pref && region) {
-        baseScore += 12;
-        factors.push(`Région recommandée (${bottle.region})`);
-      }
+      if (pref && region) { baseScore += 12; factors.push(`Région recommandée (${bottle.region})`); }
     }
-
-    // Bonus regionsBonus : score par appellation spécifique
     if (pairing.regionsBonus?.length) {
       for (const rb of pairing.regionsBonus) {
         const pat = rb.pattern.toLowerCase();
         if (region.includes(pat) || (bottle.appellation ?? '').toLowerCase().includes(pat)) {
           baseScore += rb.bonus;
           factors.push(`Appellation idéale (${rb.pattern})`);
-          break; // un seul bonus région
+          break;
         }
       }
     }
-
   } else if (pairing.bon.couleurs.includes(couleur)) {
-    baseScore = 28;
-    match     = 'bon';
+    baseScore = 28; match = 'bon';
   } else if (pairing.acceptable.couleurs.includes(couleur)) {
-    baseScore = 16;
-    match     = 'compromis';
-    caveat    = `${pairing.texteCompromis} ${pairing.texteAchat}`;
+    baseScore = 16; match = 'compromis';
+    caveat = `${pairing.texteCompromis} ${pairing.texteAchat}`;
   } else {
-    // couleur dans eviter ou non listée
-    baseScore = 6;
-    match     = 'compromis';
-    caveat    = pairing.eviter.raison
+    baseScore = 6; match = 'compromis';
+    caveat = pairing.eviter.raison
       ? `${pairing.eviter.raison} ${pairing.texteAchat}`
       : `Ce ${couleur} n'est pas recommandé ici. ${pairing.texteAchat}`;
   }
 
-  // ── 2. Bonus note utilisateur (+0-20) ────────────────────────────────────────
+  // 2. Bonus note utilisateur (+0-20)
   const userNote = getUserNote(bottle);
   if (userNote !== null) {
     const noteBonus = Math.round((userNote / 5) * 20);
     baseScore += noteBonus;
-    if (userNote >= 4.5) factors.push(`Coup de cœur (${userNote.toFixed(1)}/5)`);
-    else if (userNote >= 4) factors.push(`Très bien noté (${userNote.toFixed(1)}/5)`);
-    else if (userNote >= 3) factors.push(`Bien noté (${userNote.toFixed(1)}/5)`);
+    if (userNote >= 4.5)      factors.push(`Coup de cœur (${userNote.toFixed(1)}/5)`);
+    else if (userNote >= 4)   factors.push(`Très bien noté (${userNote.toFixed(1)}/5)`);
+    else if (userNote >= 3)   factors.push(`Bien noté (${userNote.toFixed(1)}/5)`);
   }
 
-  // ── 3. Bonus maturité (+0-15) ────────────────────────────────────────────────
+  // 3. Bonus maturité (+0-15)
   const currentYear = new Date().getFullYear();
   if (bottle.consommerAvant) {
     const yearsLeft = bottle.consommerAvant - currentYear;
-    if (yearsLeft >= 0 && yearsLeft <= 2) { baseScore += 15; factors.push('À maturité optimale'); }
-    else if (yearsLeft > 2 && yearsLeft <= 5) { baseScore += 8; }
-    else if (yearsLeft < 0) { baseScore += 2; factors.push('Dépasse la garde recommandée'); }
+    if (yearsLeft >= 0 && yearsLeft <= 2)      { baseScore += 15; factors.push('À maturité optimale'); }
+    else if (yearsLeft > 2 && yearsLeft <= 5)  { baseScore += 8; }
+    else if (yearsLeft < 0)                    { baseScore += 2; factors.push('Dépasse la garde recommandée'); }
   }
 
-  // ── 4. Bonus stock (+5) ─────────────────────────────────────────────────────
-  if (bottle.quantite >= 2) baseScore += 5;
+  // 4. Bonus stock agrégé toutes caves (+5)
+  if (g.totalQty >= 2) baseScore += 5;
 
-  // ── 5. Bonus favori (+5) ────────────────────────────────────────────────────
+  // 5. Bonus favori (+5)
   if (bottle.isFavorite) { baseScore += 5; factors.push('Favori'); }
 
   const finalScore  = Math.min(Math.round(baseScore), 100);
@@ -218,7 +244,7 @@ function scoreBottle(
   return { score: finalScore, match, explanation, factors, caveat };
 }
 
-// ── analyzeFood — rétrocompat (appelle detectFood) ────────────────────────────
+// ── analyzeFood ───────────────────────────────────────────────────────────────
 
 export function analyzeFood(platText: string): FoodProfile | null {
   if (!platText.trim()) return null;
@@ -228,52 +254,62 @@ export function analyzeFood(platText: string): FoodProfile | null {
 }
 
 // ── getRecommendations ────────────────────────────────────────────────────────
-// `bottles` doit déjà être filtré par le lieu actif si applicable (discover.tsx).
+// `bottles` doit déjà être filtré par lieu actif si applicable.
 
 export function getRecommendations(bottles: Bottle[], platText: string): RecommendationResult {
-  // Déduplication appliquée en premier sur toutes les branches (plat reconnu ET non reconnu)
-  const available = deduplicateBottles(bottles.filter(b => b.quantite > 0));
+  const groups = groupBottles(bottles.filter(b => b.quantite > 0));
 
-  if (!platText.trim() || !available.length) {
+  if (!platText.trim() || !groups.length) {
     return { wines: [], message: '', hasIdeal: false, bestLevel: 'aucun', foodLabel: platText };
   }
 
   const pairing = detectFood(platText);
 
-  // ── Plat non reconnu ─────────────────────────────────────────────────────────
+  // Plat non reconnu → top des mieux notés
   if (!pairing) {
-    const topRated = available
-      .filter(b => getUserNote(b) !== null)
-      .sort((a, b) => (getUserNote(b) ?? 0) - (getUserNote(a) ?? 0))
+    const topRated = groups
+      .filter(g => getUserNote(g.representative) !== null)
+      .sort((a, b) => (getUserNote(b.representative) ?? 0) - (getUserNote(a.representative) ?? 0))
       .slice(0, 3)
-      .map(b => ({
-        bottle: b,
-        score: Math.round(((getUserNote(b) ?? 3) / 5) * 60 + 20),
+      .map(g => ({
+        bottle: g.representative,
+        allOccurrences: g.allOccurrences,
+        totalQty: g.totalQty,
+        score: Math.round(((getUserNote(g.representative) ?? 3) / 5) * 60 + 20),
         match: 'bon' as const,
         explanation: 'Sélection basée sur vos notes personnelles.',
         factors: ['Bien noté'],
       }));
-
     return {
       wines: topRated,
       message: topRated.length
         ? `Plat non reconnu — voici vos bouteilles les mieux notées.`
-        : `Plat non reconnu — ajoutez des notes à vos bouteilles pour des suggestions personnalisées.`,
+        : `Plat non reconnu — ajoutez des notes pour des suggestions personnalisées.`,
       hasIdeal: false,
       bestLevel: topRated.length ? 'bon' : 'aucun',
       foodLabel: platText,
     };
   }
 
-  // ── Scorer toutes les bouteilles disponibles (déjà dédupliquées) ─────────────
-  const scored = available
-    .map(b => ({ bottle: b, ...scoreBottle(b, pairing) }))
-    .filter(x => x.score >= 8)
-    .sort((a, b) => b.score - a.score);
+  const toRec = (g: BottleGroup, s: ReturnType<typeof scoreGroup>): WineRecommendation => ({
+    bottle: g.representative,
+    allOccurrences: g.allOccurrences,
+    totalQty: g.totalQty,
+    score: s.score,
+    match: s.match,
+    explanation: s.explanation,
+    factors: s.factors,
+    caveat: s.caveat,
+  });
 
-  const ideals    = scored.filter(x => x.match === 'ideal');
-  const bons      = scored.filter(x => x.match === 'bon');
-  const compromis = scored.filter(x => x.match === 'compromis');
+  const scored = groups
+    .map(g => ({ g, s: scoreGroup(g, pairing) }))
+    .filter(x => x.s.score >= 8)
+    .sort((a, b) => b.s.score - a.s.score);
+
+  const ideals    = scored.filter(x => x.s.match === 'ideal');
+  const bons      = scored.filter(x => x.s.match === 'bon');
+  const compromis = scored.filter(x => x.s.match === 'compromis');
 
   let bestLevel: RecommendationResult['bestLevel'] = 'aucun';
   let wines: WineRecommendation[] = [];
@@ -282,28 +318,20 @@ export function getRecommendations(bottles: Bottle[], platText: string): Recomme
 
   if (ideals.length > 0) {
     bestLevel = 'ideal';
-    wines     = [...ideals, ...bons].slice(0, 5);
-    message   = ideals.length === 1
-      ? `1 accord idéal trouvé dans votre cave.`
-      : `${ideals.length} accords idéaux dans votre cave.`;
-
+    wines     = [...ideals, ...bons].slice(0, 5).map(x => toRec(x.g, x.s));
+    message   = ideals.length === 1 ? `1 accord idéal trouvé dans votre cave.` : `${ideals.length} accords idéaux dans votre cave.`;
   } else if (bons.length > 0) {
     bestLevel = 'bon';
-    wines     = bons.slice(0, 5);
-    message   = bons.length === 1
-      ? `Pas d'accord parfait mais 1 bon accord disponible.`
-      : `Pas d'accord parfait mais ${bons.length} bons accords disponibles.`;
+    wines     = bons.slice(0, 5).map(x => toRec(x.g, x.s));
+    message   = bons.length === 1 ? `Pas d'accord parfait mais 1 bon accord disponible.` : `Pas d'accord parfait mais ${bons.length} bons accords disponibles.`;
     idealSuggestion = pairing.texteAchat;
-
   } else if (compromis.length > 0) {
     bestLevel = 'compromis';
-    wines     = compromis.slice(0, 3);
+    wines     = compromis.slice(0, 3).map(x => toRec(x.g, x.s));
     message   = `Aucun accord idéal dans votre cave pour ce plat. Ces vins peuvent dépanner.`;
     idealSuggestion = pairing.texteAchat;
-
   } else {
     bestLevel = 'aucun';
-    wines     = [];
     message   = `Aucun vin disponible ne correspond à "${platText}".`;
     idealSuggestion = pairing.texteAchat;
   }

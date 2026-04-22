@@ -11,6 +11,7 @@ import { Colors, Spacing, Radius, API_URL } from '../../src/constants';
 import { COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../../src/constants';
 import { useBottleStore, useCavesStore } from '../../src/stores';
 import { Input, Button, SelectModal, StarRating } from '../../src/components/ui';
+import { normalizeWineStr } from '../../src/utils/recommendation';
 import type { SelectOption } from '../../src/components/ui';
 import type { CouleurVin, FormatBouteille } from '../../src/types';
 
@@ -29,60 +30,79 @@ interface ScanResult {
   message:     string;
 }
 
-// Options pour selects
 const couleurOptions: SelectOption[] = COULEURS_VIN.map(c => ({ label: c, value: c }));
-const regionOptions: SelectOption[]  = REGIONS.map(r => ({ label: r, value: r }));
+const regionOptions:  SelectOption[] = REGIONS.map(r => ({ label: r, value: r }));
 const appellationOptions: SelectOption[] = APPELLATIONS.map(a => ({ label: a, value: a }));
-const paysOptions: SelectOption[]    = PAYS.map(p => ({ label: p, value: p }));
-const formatOptions: SelectOption[]  = FORMATS_BOUTEILLE.map(f => ({ label: f.label, value: f.value }));
+const paysOptions:    SelectOption[] = PAYS.map(p => ({ label: p, value: p }));
+const formatOptions:  SelectOption[] = FORMATS_BOUTEILLE.map(f => ({ label: f.label, value: f.value }));
 
 export default function AddScreen() {
-  const { addBottle } = useBottleStore();
+  const { addBottle, bottles, localPhotos } = useBottleStore();
   const { caves, activeCave, activeLieu, fetchCaves } = useCavesStore();
-  const [step, setStep] = useState(0);
+  const [step, setStep]       = useState(0);
   const [loading, setLoading] = useState(false);
+  const [cavesLoaded, setCavesLoaded] = useState(false);
 
-  // Scan
+  // Caméra
   const [permission, requestPermission] = useCameraPermissions();
-  const [showScan, setShowScan]         = useState(false);
-  const [scanning, setScanning]         = useState(false);
-  const [photoUri, setPhotoUri]         = useState<string | null>(null);
-  const [scanResult, setScanResult]     = useState<ScanResult | null>(null);
-  const [showResult, setShowResult]     = useState(false);
+  const [showScan, setShowScan]   = useState(false);
+  const [scanning, setScanning]   = useState(false);
+  const [analyzeMode, setAnalyzeMode] = useState(true); // true = scan+OCR, false = photo seule
+  const [photoUri, setPhotoUri]   = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [showResult, setShowResult] = useState(false);
   const cameraRef = useRef<any>(null);
 
   // Étape 0 — identité
-  const [nom, setNom]           = useState('');
+  const [nom, setNom]               = useState('');
   const [producteur, setProducteur] = useState('');
-  const [couleur, setCouleur]   = useState<CouleurVin | ''>('');
-  const [annee, setAnnee]       = useState('');
-  const [region, setRegion]     = useState('');
+  const [couleur, setCouleur]       = useState<CouleurVin | ''>('');
+  const [annee, setAnnee]           = useState('');
+  const [region, setRegion]         = useState('');
   const [appellation, setAppellation] = useState('');
-  const [pays, setPays]         = useState('France');
-  const [cepage, setCepage]     = useState('');
+  const [pays, setPays]             = useState('France');
+  const [cepage, setCepage]         = useState('');
 
   // Étape 1 — détails
-  const [quantite, setQuantite] = useState('1');
-  const [format, setFormat]     = useState<FormatBouteille | ''>('');
-  const [prixAchat, setPrixAchat] = useState('');
+  const [quantite, setQuantite]     = useState('1');
+  const [format, setFormat]         = useState<FormatBouteille | ''>('');
+  const [prixAchat, setPrixAchat]   = useState('');
   const [consommerAvant, setConsommerAvant] = useState('');
-  const [lieuAchat, setLieuAchat] = useState('');
+  const [lieuAchat, setLieuAchat]   = useState('');
   const [description, setDescription] = useState('');
-  const [notePerso, setNotePerso] = useState(0);
+  const [notePerso, setNotePerso]   = useState(0);
 
   // Étape 2 — cave
-  const [cave, setCave]           = useState('');
+  const [cave, setCave]             = useState('');
   const [emplacement, setEmplacement] = useState('');
 
+  // Suggestion réutilisation photo
+  const [suggestedPhoto, setSuggestedPhoto] = useState<{ uri: string; bottleNom: string } | null>(null);
+
   useEffect(() => {
-    fetchCaves();
+    fetchCaves().finally(() => setCavesLoaded(true));
   }, []);
 
   useEffect(() => {
     if (activeCave && !cave) setCave(activeCave.name);
   }, [activeCave]);
 
-  // Caves filtrées par lieu actif — si aucun lieu sélectionné, toutes les caves
+  // Détection de photo réutilisable (même logique métier que recommendation.ts)
+  useEffect(() => {
+    const normNom = normalizeWineStr(nom);
+    if (normNom.length < 3 || photoUri) { setSuggestedPhoto(null); return; }
+    const normProd = normalizeWineStr(producteur);
+    const normAnnee = annee.trim();
+    const match = bottles.find(b => {
+      if (normalizeWineStr(b.nom) !== normNom) return false;
+      if (normAnnee && b.annee && String(b.annee) !== normAnnee) return false;
+      const bProd = normalizeWineStr(b.producteur);
+      if (normProd && bProd && bProd !== normProd) return false;
+      return !!localPhotos[b._id];
+    });
+    setSuggestedPhoto(match ? { uri: localPhotos[match._id], bottleNom: match.nom ?? nom } : null);
+  }, [nom, producteur, annee, photoUri, bottles, localPhotos]);
+
   const filteredCaves = activeLieu ? caves.filter(c => c.location === activeLieu) : caves;
   const caveOptions: SelectOption[] = filteredCaves.map(c => ({
     label: c.location ? `${c.name} — ${c.location}` : c.name,
@@ -92,13 +112,15 @@ export default function AddScreen() {
     ? (caves.find(c => c.name === cave)?.emplacements ?? []).map(e => ({ label: e, value: e }))
     : [];
 
-  // ── Scan étiquette ──
-  const openScan = async () => {
+  // ── Caméra ──────────────────────────────────────────────────────────────────
+
+  const openCamera = async (analyze: boolean) => {
     if (!permission?.granted) {
       const res = await requestPermission();
-      if (!res.granted) { Alert.alert('Permission caméra refusée'); return; }
+      if (!res.granted) { Alert.alert('Permission refusée', 'Autorisez l\'accès à la caméra dans les réglages.'); return; }
     }
     setScanResult(null);
+    setAnalyzeMode(analyze);
     setShowScan(true);
   };
 
@@ -106,15 +128,10 @@ export default function AddScreen() {
     if (!cameraRef.current || scanning) return;
     setScanning(true);
     try {
-      // Qualité élevée pour meilleure reconnaissance OCR
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.92,
-        base64: false,
-        exif: false,
-      });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.92, base64: false, exif: false });
       setPhotoUri(photo.uri);
       setShowScan(false);
-      await analyzeLabel(photo.uri);
+      if (analyzeMode) await analyzeLabel(photo.uri);
     } catch {
       Alert.alert('Erreur', 'Impossible de prendre la photo.');
     } finally {
@@ -125,37 +142,21 @@ export default function AddScreen() {
   const analyzeLabel = async (uri: string) => {
     setLoading(true);
     try {
-      const SecureStore = await import('expo-secure-store');
+      const SecureStore      = await import('expo-secure-store');
       const ImageManipulator = await import('expo-image-manipulator');
       const token = await SecureStore.getItemAsync('cave_token');
-
-      // Compression avant envoi : redimensionne à 1000px de large, qualité 0.8
       const compressed = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 1000 } }],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+        uri, [{ resize: { width: 1000 } }], { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
       );
-
       const formData = new FormData();
       formData.append('image', { uri: compressed.uri, name: 'label.jpg', type: 'image/jpeg' } as any);
-
-      const res = await fetch(API_URL + '/api/bottles/scan-label', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+      const res  = await fetch(API_URL + '/api/bottles/scan-label', {
+        method: 'POST', body: formData,
+        headers: { 'Content-Type': 'multipart/form-data', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
-
       const data = await res.json();
-
-      if (res.ok && data) {
-        setScanResult(data);
-        setShowResult(true);
-      } else {
-        Alert.alert('Analyse impossible', 'Complétez les informations manuellement.');
-      }
+      if (res.ok && data) { setScanResult(data); setShowResult(true); }
+      else Alert.alert('Analyse impossible', 'Complétez les informations manuellement.');
     } catch {
       Alert.alert('Analyse impossible', 'Vérifiez votre connexion et réessayez.');
     } finally {
@@ -173,16 +174,22 @@ export default function AddScreen() {
     setShowResult(false);
   };
 
-  // ── Validation ──
+  // ── Validation ───────────────────────────────────────────────────────────────
+
   const validateStep = (): boolean => {
-    if (step === 0 && !nom.trim()) { Alert.alert('Le nom est obligatoire'); return false; }
+    if (step === 0 && !photoUri) {
+      Alert.alert('Photo obligatoire', 'Ajoutez une photo de la bouteille pour continuer.');
+      return false;
+    }
+    if (step === 0 && !nom.trim()) { Alert.alert('Nom obligatoire'); return false; }
     if (step === 1) {
       const q = parseInt(quantite);
       if (isNaN(q) || q < 1) { Alert.alert('Quantité invalide'); return false; }
     }
     if (step === 2 && !cave) { Alert.alert('Cave obligatoire'); return false; }
-    // L'emplacement est obligatoire seulement si la cave en propose
-    if (step === 2 && emplacementOptions.length > 0 && !emplacement) { Alert.alert('Emplacement obligatoire pour cette cave'); return false; }
+    if (step === 2 && emplacementOptions.length > 0 && !emplacement) {
+      Alert.alert('Emplacement obligatoire pour cette cave'); return false;
+    }
     return true;
   };
 
@@ -195,7 +202,7 @@ export default function AddScreen() {
     setQuantite('1'); setFormat(''); setPrixAchat(''); setConsommerAvant('');
     setLieuAchat(''); setDescription(''); setNotePerso(0);
     setCave(''); setEmplacement('');
-    setPhotoUri(null); setScanResult(null);
+    setPhotoUri(null); setScanResult(null); setSuggestedPhoto(null);
   };
 
   const handleSave = async () => {
@@ -214,8 +221,7 @@ export default function AddScreen() {
         consommerAvant: consommerAvant ? parseInt(consommerAvant) : undefined,
         lieuAchat: lieuAchat.trim() || undefined,
         notePerso: notePerso > 0 ? { note: notePerso, texte: '' } : undefined,
-        source: 'manual',
-        cave, emplacement,
+        source: 'manual', cave, emplacement,
       }, photoUri ?? undefined);
       resetForm();
       router.back();
@@ -226,6 +232,37 @@ export default function AddScreen() {
     }
   };
 
+  // ── Guard : aucune cave ──────────────────────────────────────────────────────
+
+  if (cavesLoaded && caves.length === 0) {
+    return (
+      <SafeAreaView style={s.safe} edges={['top']}>
+        <View style={s.header}>
+          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={20} color={Colors.brunMoka} />
+          </TouchableOpacity>
+          <Text style={s.headerTitle}>Ajouter une bouteille</Text>
+          <View style={{ width: 80 }} />
+        </View>
+        <View style={s.noCaveContainer}>
+          <View style={s.noCaveIcon}>
+            <Ionicons name="home-outline" size={40} color={Colors.lieDeVin} />
+          </View>
+          <Text style={s.noCaveTitle}>Aucune cave créée</Text>
+          <Text style={s.noCaveText}>
+            Vous devez d'abord créer une cave pour pouvoir y stocker des bouteilles.
+          </Text>
+          <TouchableOpacity style={s.noCaveBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.8}>
+            <Ionicons name="add" size={16} color={Colors.white} />
+            <Text style={s.noCaveBtnText}>Créer ma première cave</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Rendu formulaire ─────────────────────────────────────────────────────────
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Header */}
@@ -235,8 +272,8 @@ export default function AddScreen() {
         </TouchableOpacity>
         <Text style={s.headerTitle}>Ajouter une bouteille</Text>
         {step === 0
-          ? <TouchableOpacity style={s.scanBtn} onPress={openScan}>
-              <Ionicons name="camera-outline" size={20} color={Colors.lieDeVin} />
+          ? <TouchableOpacity style={s.scanBtn} onPress={() => openCamera(true)}>
+              <Ionicons name="scan-outline" size={18} color={Colors.lieDeVin} />
               <Text style={s.scanBtnText}>Scanner</Text>
             </TouchableOpacity>
           : <View style={{ width: 80 }} />
@@ -261,22 +298,9 @@ export default function AddScreen() {
         ))}
       </View>
 
-      {/* Photo scannée */}
-      {photoUri && step === 0 && (
-        <View style={s.photoPreview}>
-          <Image source={{ uri: photoUri }} style={s.photoThumb} />
-          <Text style={s.photoText}>Étiquette scannée — vérifiez les champs</Text>
-          <TouchableOpacity onPress={() => setPhotoUri(null)}>
-            <Ionicons name="close-circle" size={20} color={Colors.brunClair} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* KAV englobe ScrollView + footer pour que le bouton remonte avec le clavier */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
       >
         <ScrollView
           style={{ flex: 1 }}
@@ -286,11 +310,64 @@ export default function AddScreen() {
           keyboardDismissMode="on-drag"
         >
 
-          {/* Étape 0 — Identité */}
+          {/* ── Étape 0 — Identité ── */}
           {step === 0 && (
             <>
+              {/* Bloc photo — obligatoire — en haut */}
+              {!photoUri ? (
+                <View style={s.photoCta}>
+                  <Text style={s.photoCtaLabel}>Photo obligatoire</Text>
+                  <View style={s.photoCtaRow}>
+                    <TouchableOpacity style={s.photoCtaBtn} onPress={() => openCamera(true)} activeOpacity={0.8}>
+                      <Ionicons name="scan-outline" size={24} color={Colors.lieDeVin} />
+                      <Text style={s.photoCtaBtnText}>Scanner l'étiquette</Text>
+                      <Text style={s.photoCtaBtnSub}>Remplit les champs auto</Text>
+                    </TouchableOpacity>
+                    <View style={s.photoCtaDivider} />
+                    <TouchableOpacity style={s.photoCtaBtn} onPress={() => openCamera(false)} activeOpacity={0.8}>
+                      <Ionicons name="camera-outline" size={24} color={Colors.lieDeVin} />
+                      <Text style={s.photoCtaBtnText}>Prendre une photo</Text>
+                      <Text style={s.photoCtaBtnSub}>Saisie manuelle des champs</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={s.photoConfirmed}>
+                  <Image source={{ uri: photoUri }} style={s.photoConfirmedThumb} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.photoConfirmedTitle}>Photo ajoutée</Text>
+                    <Text style={s.photoConfirmedSub}>Vérifiez et complétez les champs</Text>
+                  </View>
+                  <View style={s.photoConfirmedActions}>
+                    <TouchableOpacity onPress={() => openCamera(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="scan-outline" size={20} color={Colors.lieDeVin} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => openCamera(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="camera-outline" size={20} color={Colors.lieDeVin} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setPhotoUri(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle-outline" size={20} color={Colors.rougeAlerte} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
               <Input label="Nom du vin" value={nom} onChangeText={setNom} required placeholder="ex : Château Margaux" />
               <Input label="Producteur / Domaine" value={producteur} onChangeText={setProducteur} placeholder="ex : Château Margaux" />
+
+              {/* Suggestion réutilisation photo */}
+              {suggestedPhoto && !photoUri && (
+                <View style={s.photoSuggestion}>
+                  <Image source={{ uri: suggestedPhoto.uri }} style={s.photoSuggThumb} />
+                  <Text style={s.photoSuggText} numberOfLines={2}>
+                    Réutiliser la photo de « {suggestedPhoto.bottleNom} »
+                  </Text>
+                  <TouchableOpacity style={s.photoSuggBtn} onPress={() => setPhotoUri(suggestedPhoto.uri)}>
+                    <Text style={s.photoSuggBtnText}>Réutiliser</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <SelectModal label="Couleur" value={couleur} options={couleurOptions} onChange={v => setCouleur(v as CouleurVin)} placeholder="Sélectionner" searchable={false} />
               <Input label="Millésime" value={annee} onChangeText={setAnnee} keyboardType="numeric" placeholder="ex : 2019" />
               <SelectModal label="Région" value={region} options={regionOptions} onChange={setRegion} placeholder="Sélectionner" searchable />
@@ -300,7 +377,7 @@ export default function AddScreen() {
             </>
           )}
 
-          {/* Étape 1 — Détails */}
+          {/* ── Étape 1 — Détails ── */}
           {step === 1 && (
             <>
               <Input label="Quantité" value={quantite} onChangeText={setQuantite} keyboardType="numeric" required />
@@ -321,22 +398,19 @@ export default function AddScreen() {
             </>
           )}
 
-          {/* Étape 2 — Cave */}
+          {/* ── Étape 2 — Cave ── */}
           {step === 2 && (
             <>
               <SelectModal label="Cave" value={cave} options={caveOptions} onChange={v => { setCave(v); setEmplacement(''); }} placeholder="Choisir une cave" required />
-              {/* L'emplacement n'est affiché que si la cave en possède */}
               {emplacementOptions.length > 0 && (
                 <SelectModal label="Emplacement" value={emplacement} options={emplacementOptions} onChange={setEmplacement} placeholder="Choisir un emplacement" required />
               )}
             </>
           )}
 
-          {/* Espace pour que le dernier champ ne soit pas caché par le footer */}
           <View style={{ height: 24 }} />
         </ScrollView>
 
-        {/* Footer sticky — paddingBottom fixe : la tab bar gère déjà la safe area */}
         <View style={s.footer}>
           {step < 2
             ? <Button label="Continuer" onPress={handleNext} fullWidth icon={<Ionicons name="arrow-forward" size={16} color={Colors.white} />} />
@@ -345,7 +419,7 @@ export default function AddScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Overlay analyse en cours */}
+      {/* Overlay analyse OCR */}
       {loading && (
         <View style={scan.loadingOverlay}>
           <View style={scan.loadingCard}>
@@ -356,35 +430,31 @@ export default function AddScreen() {
         </View>
       )}
 
-      {/* Modal camera */}
+      {/* Modal caméra */}
       <Modal visible={showScan} animationType="slide">
         <View style={cam.container}>
           <CameraView ref={cameraRef} style={cam.camera} facing="back">
             <View style={cam.overlay}>
-              {/* Fermer */}
               <View style={cam.topBar}>
                 <TouchableOpacity style={cam.close} onPress={() => setShowScan(false)}>
                   <Ionicons name="close" size={24} color={Colors.white} />
                 </TouchableOpacity>
-                <Text style={cam.topTitle}>Scanner l'étiquette</Text>
+                <Text style={cam.topTitle}>{analyzeMode ? 'Scanner l\'étiquette' : 'Photo de la bouteille'}</Text>
                 <View style={{ width: 40 }} />
               </View>
-
-              {/* Cadre de guidage */}
-              <View style={cam.guide}>
-                <View style={cam.frameBorder}>
-                  {/* Coins décoratifs */}
-                  <View style={[cam.corner, cam.cornerTL]} />
-                  <View style={[cam.corner, cam.cornerTR]} />
-                  <View style={[cam.corner, cam.cornerBL]} />
-                  <View style={[cam.corner, cam.cornerBR]} />
+              {analyzeMode && (
+                <View style={cam.guide}>
+                  <View style={cam.frameBorder}>
+                    <View style={[cam.corner, cam.cornerTL]} />
+                    <View style={[cam.corner, cam.cornerTR]} />
+                    <View style={[cam.corner, cam.cornerBL]} />
+                    <View style={[cam.corner, cam.cornerBR]} />
+                  </View>
+                  <Text style={cam.hint}>Centrez l'étiquette dans le cadre</Text>
+                  <Text style={cam.hintSub}>La lumière naturelle améliore la reconnaissance</Text>
                 </View>
-                <Text style={cam.hint}>Centrez l'étiquette dans le cadre</Text>
-                <Text style={cam.hintSub}>La lumière naturelle améliore la reconnaissance</Text>
-              </View>
-
-              {/* Déclencheur */}
-              <View style={cam.shutterArea}>
+              )}
+              <View style={[cam.shutterArea, !analyzeMode && { flex: 1, justifyContent: 'flex-end', paddingBottom: 56 }]}>
                 <TouchableOpacity style={cam.shutter} onPress={takePhoto} disabled={scanning} activeOpacity={0.8}>
                   {scanning
                     ? <ActivityIndicator color={Colors.white} size="large" />
@@ -406,14 +476,13 @@ export default function AddScreen() {
                 result={scanResult}
                 photoUri={photoUri}
                 onApply={() => applyScanResult(scanResult)}
-                onRetry={() => { setShowResult(false); openScan(); }}
+                onRetry={() => { setShowResult(false); openCamera(true); }}
                 onDismiss={() => setShowResult(false)}
               />
             )}
           </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
@@ -421,15 +490,11 @@ export default function AddScreen() {
 // ── ScanResultSheet ────────────────────────────────────────────────────────────
 
 function ScanResultSheet({ result, photoUri, onApply, onRetry, onDismiss }: {
-  result: ScanResult;
-  photoUri: string | null;
-  onApply: () => void;
-  onRetry: () => void;
-  onDismiss: () => void;
+  result: ScanResult; photoUri: string | null;
+  onApply: () => void; onRetry: () => void; onDismiss: () => void;
 }) {
   const confidenceColor = result.confidence >= 70 ? Colors.vertSauge : result.confidence >= 35 ? Colors.ambreChaud : Colors.rougeAlerte;
   const confidenceBg    = result.confidence >= 70 ? Colors.vertSaugeLight : result.confidence >= 35 ? Colors.ambreChaudLight : Colors.rougeAlerteLight;
-
   const fields = [
     { key: 'nom',         label: 'Nom du vin',  value: result.nom },
     { key: 'producteur',  label: 'Producteur',  value: result.producteur },
@@ -438,59 +503,35 @@ function ScanResultSheet({ result, photoUri, onApply, onRetry, onDismiss }: {
     { key: 'region',      label: 'Région',      value: result.region },
     { key: 'appellation', label: 'Appellation', value: result.appellation },
   ];
-
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
-      {/* En-tête */}
       <View style={scan.sheetHeader}>
-        {photoUri && (
-          <Image source={{ uri: photoUri }} style={scan.thumb} />
-        )}
+        {photoUri && <Image source={{ uri: photoUri }} style={scan.thumb} />}
         <View style={scan.sheetTitles}>
           <Text style={scan.sheetTitle}>Résultat du scan</Text>
           <View style={[scan.confidencePill, { backgroundColor: confidenceBg }]}>
-            <Text style={[scan.confidenceText, { color: confidenceColor }]}>
-              {result.confidence}% de confiance
-            </Text>
+            <Text style={[scan.confidenceText, { color: confidenceColor }]}>{result.confidence}% de confiance</Text>
           </View>
         </View>
       </View>
-
-      {/* Message contextuel */}
       <View style={[scan.messageBanner, { backgroundColor: confidenceBg, borderColor: confidenceColor + '40' }]}>
-        <Ionicons
-          name={result.confidence >= 70 ? 'checkmark-circle-outline' : result.confidence >= 35 ? 'alert-circle-outline' : 'close-circle-outline'}
-          size={16}
-          color={confidenceColor}
-        />
+        <Ionicons name={result.confidence >= 70 ? 'checkmark-circle-outline' : result.confidence >= 35 ? 'alert-circle-outline' : 'close-circle-outline'} size={16} color={confidenceColor} />
         <Text style={[scan.messageText, { color: confidenceColor }]}>{result.message}</Text>
       </View>
-
-      {/* Champs détectés */}
       <Text style={scan.fieldsTitle}>Informations détectées</Text>
       {fields.map(f => (
         <View key={f.key} style={scan.fieldRow}>
           <View style={[scan.fieldCheck, { backgroundColor: f.value ? Colors.vertSaugeLight : Colors.parchemin }]}>
-            <Ionicons
-              name={f.value ? 'checkmark' : 'remove'}
-              size={12}
-              color={f.value ? Colors.vertSauge : Colors.brunClair}
-            />
+            <Ionicons name={f.value ? 'checkmark' : 'remove'} size={12} color={f.value ? Colors.vertSauge : Colors.brunClair} />
           </View>
           <Text style={scan.fieldLabel}>{f.label}</Text>
-          <Text style={[scan.fieldValue, !f.value && scan.fieldValueEmpty]} numberOfLines={1}>
-            {f.value ?? '—'}
-          </Text>
+          <Text style={[scan.fieldValue, !f.value && scan.fieldValueEmpty]} numberOfLines={1}>{f.value ?? '—'}</Text>
         </View>
       ))}
-
-      {/* Actions */}
       <View style={scan.actions}>
         <TouchableOpacity style={scan.btnPrimary} onPress={onApply} activeOpacity={0.85}>
           <Ionicons name="checkmark" size={16} color={Colors.white} />
-          <Text style={scan.btnPrimaryText}>
-            {result.confidence >= 35 ? 'Appliquer et vérifier' : 'Remplir quand même'}
-          </Text>
+          <Text style={scan.btnPrimaryText}>{result.confidence >= 35 ? 'Appliquer et vérifier' : 'Remplir quand même'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={scan.btnSecondary} onPress={onRetry} activeOpacity={0.8}>
           <Ionicons name="camera-outline" size={16} color={Colors.lieDeVin} />
@@ -504,34 +545,63 @@ function ScanResultSheet({ result, photoUri, onApply, onRetry, onDismiss }: {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: Colors.cremeIvoire },
   header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.parchemin, backgroundColor: Colors.champagne },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: Colors.brunMoka },
-  scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: Colors.lieDeVin + '40' },
+  scanBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: Colors.lieDeVin + '40' },
   scanBtnText: { fontSize: 13, fontWeight: '700', color: Colors.lieDeVin },
 
-  stepperRow:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, backgroundColor: Colors.champagne, borderBottomWidth: 1, borderBottomColor: Colors.parchemin },
-  stepItem:    { alignItems: 'center', gap: 4 },
-  stepDot:     { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
-  stepDotActive:{ backgroundColor: Colors.lieDeVin },
-  stepDotDone: { backgroundColor: Colors.vertSauge },
-  stepNum:     { fontSize: 11, fontWeight: '700', color: Colors.brunClair },
-  stepNumActive:{ color: Colors.white },
-  stepLabel:   { fontSize: 10, color: Colors.brunClair, fontWeight: '500' },
+  stepperRow:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, backgroundColor: Colors.champagne, borderBottomWidth: 1, borderBottomColor: Colors.parchemin },
+  stepItem:        { alignItems: 'center', gap: 4 },
+  stepDot:         { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
+  stepDotActive:   { backgroundColor: Colors.lieDeVin },
+  stepDotDone:     { backgroundColor: Colors.vertSauge },
+  stepNum:         { fontSize: 11, fontWeight: '700', color: Colors.brunClair },
+  stepNumActive:   { color: Colors.white },
+  stepLabel:       { fontSize: 10, color: Colors.brunClair, fontWeight: '500' },
   stepLabelActive: { color: Colors.lieDeVin, fontWeight: '700' },
-  stepLine:    { flex: 1, height: 1, backgroundColor: Colors.parchemin, marginBottom: 14 },
-  stepLineDone:{ backgroundColor: Colors.vertSauge },
+  stepLine:        { flex: 1, height: 1, backgroundColor: Colors.parchemin, marginBottom: 14 },
+  stepLineDone:    { backgroundColor: Colors.vertSauge },
 
-  photoPreview: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, margin: Spacing.lg, padding: Spacing.sm, backgroundColor: Colors.blancDoreLight, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.ambreChaud + '40' },
-  photoThumb:   { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.parchemin },
-  photoText:    { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
+  // Bloc photo CTA (aucune photo)
+  photoCta:       { backgroundColor: Colors.champagne, borderRadius: Radius.xl, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', marginBottom: Spacing.lg, overflow: 'hidden' },
+  photoCtaLabel:  { fontSize: 10, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
+  photoCtaRow:    { flexDirection: 'row' },
+  photoCtaBtn:    { flex: 1, alignItems: 'center', gap: 6, paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md },
+  photoCtaBtnText:{ fontSize: 13, fontWeight: '700', color: Colors.lieDeVin, textAlign: 'center' },
+  photoCtaBtnSub: { fontSize: 10, color: Colors.brunClair, textAlign: 'center' },
+  photoCtaDivider:{ width: 1, backgroundColor: Colors.parchemin, marginVertical: Spacing.md },
 
-  form:          { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  footer:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
-  notePersoRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
+  // Bloc photo confirmée
+  photoConfirmed:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.vertSaugeLight, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.vertSauge + '50', marginBottom: Spacing.lg },
+  photoConfirmedThumb:  { width: 52, height: 64, borderRadius: Radius.sm, backgroundColor: Colors.parchemin },
+  photoConfirmedTitle:  { fontSize: 13, fontWeight: '700', color: Colors.vertSauge },
+  photoConfirmedSub:    { fontSize: 11, color: Colors.brunMoyen, marginTop: 2 },
+  photoConfirmedActions:{ flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
+
+  // Suggestion réutilisation photo
+  photoSuggestion: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.ambreChaudLight, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.ambreChaud + '40', padding: Spacing.sm, marginBottom: Spacing.md },
+  photoSuggThumb:  { width: 36, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.parchemin },
+  photoSuggText:   { flex: 1, fontSize: 12, color: Colors.ambreChaud, fontWeight: '600' },
+  photoSuggBtn:    { backgroundColor: Colors.ambreChaud, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  photoSuggBtnText:{ fontSize: 12, fontWeight: '700', color: Colors.white },
+
+  form:         { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+  footer:       { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+  notePersoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, paddingVertical: Spacing.sm },
   notePersoLabel:{ fontSize: 14, fontWeight: '600', color: Colors.brunMoyen, flex: 1 },
+
+  // Guard aucune cave
+  noCaveContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.lg },
+  noCaveIcon:      { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.rougeVinLight, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.lieDeVin + '30' },
+  noCaveTitle:     { fontSize: 20, fontWeight: '800', color: Colors.brunMoka, textAlign: 'center' },
+  noCaveText:      { fontSize: 14, color: Colors.brunMoyen, textAlign: 'center', lineHeight: 22 },
+  noCaveBtn:       { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.lieDeVin, borderRadius: Radius.full, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md },
+  noCaveBtnText:   { fontSize: 15, fontWeight: '700', color: Colors.white },
 });
 
 const cam = StyleSheet.create({
@@ -542,16 +612,12 @@ const cam = StyleSheet.create({
   close:       { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   topTitle:    { fontSize: 16, fontWeight: '700', color: Colors.white },
   guide:       { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xxl },
-  frameBorder: {
-    width: 270, height: 170, borderRadius: Radius.lg,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)',
-    position: 'relative',
-  },
-  corner:   { position: 'absolute', width: 24, height: 24, borderColor: Colors.white, borderWidth: 3 },
-  cornerTL: { top: -2, left: -2, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-  cornerTR: { top: -2, right: -2, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-  cornerBL: { bottom: -2, left: -2, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-  cornerBR: { bottom: -2, right: -2, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+  frameBorder: { width: 270, height: 170, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)', position: 'relative' },
+  corner:      { position: 'absolute', width: 24, height: 24, borderColor: Colors.white, borderWidth: 3 },
+  cornerTL:    { top: -2, left: -2, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+  cornerTR:    { top: -2, right: -2, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+  cornerBL:    { bottom: -2, left: -2, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+  cornerBR:    { bottom: -2, right: -2, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
   hint:        { color: Colors.white, fontSize: 14, fontWeight: '600', textAlign: 'center' },
   hintSub:     { color: 'rgba(255,255,255,0.6)', fontSize: 12, textAlign: 'center' },
   shutterArea: { alignItems: 'center', paddingBottom: 56 },
@@ -564,32 +630,27 @@ const scan = StyleSheet.create({
   loadingCard:    { alignItems: 'center', gap: Spacing.md, padding: Spacing.xl },
   loadingTitle:   { fontSize: 17, fontWeight: '700', color: Colors.brunMoka },
   loadingText:    { fontSize: 13, color: Colors.brunMoyen },
-
-  backdrop: { flex: 1, backgroundColor: 'rgba(26,16,8,0.5)', justifyContent: 'flex-end' },
-  sheet:    { backgroundColor: Colors.champagne, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingBottom: 40, paddingTop: Spacing.lg, maxHeight: '90%' },
-
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
-  thumb:        { width: 60, height: 80, borderRadius: Radius.md, backgroundColor: Colors.parchemin },
-  sheetTitles:  { flex: 1, gap: 6 },
-  sheetTitle:   { fontSize: 18, fontWeight: '800', color: Colors.brunMoka },
+  backdrop:  { flex: 1, backgroundColor: 'rgba(26,16,8,0.5)', justifyContent: 'flex-end' },
+  sheet:     { backgroundColor: Colors.champagne, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingBottom: 40, paddingTop: Spacing.lg, maxHeight: '90%' },
+  sheetHeader:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
+  thumb:          { width: 60, height: 80, borderRadius: Radius.md, backgroundColor: Colors.parchemin },
+  sheetTitles:    { flex: 1, gap: 6 },
+  sheetTitle:     { fontSize: 18, fontWeight: '800', color: Colors.brunMoka },
   confidencePill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },
   confidenceText: { fontSize: 12, fontWeight: '700' },
-
-  messageBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.lg, borderWidth: 1 },
-  messageText:   { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
-
-  fieldsTitle: { fontSize: 12, fontWeight: '700', color: Colors.brunClair, letterSpacing: 0.8, marginBottom: Spacing.sm },
-  fieldRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: Colors.parchemin },
-  fieldCheck:  { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  fieldLabel:  { width: 90, fontSize: 13, color: Colors.brunMoyen },
-  fieldValue:  { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.brunMoka, textAlign: 'right' },
-  fieldValueEmpty: { color: Colors.brunClair, fontWeight: '400' },
-
-  actions:         { gap: Spacing.sm, marginTop: Spacing.xl },
-  btnPrimary:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.lieDeVin, borderRadius: Radius.full, paddingVertical: 15 },
-  btnPrimaryText:  { fontSize: 15, fontWeight: '700', color: Colors.white },
-  btnSecondary:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingVertical: 14, borderWidth: 1, borderColor: Colors.lieDeVin + '30' },
+  messageBanner:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.lg, borderWidth: 1 },
+  messageText:    { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  fieldsTitle:    { fontSize: 12, fontWeight: '700', color: Colors.brunClair, letterSpacing: 0.8, marginBottom: Spacing.sm },
+  fieldRow:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: Colors.parchemin },
+  fieldCheck:     { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  fieldLabel:     { width: 90, fontSize: 13, color: Colors.brunMoyen },
+  fieldValue:     { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.brunMoka, textAlign: 'right' },
+  fieldValueEmpty:{ color: Colors.brunClair, fontWeight: '400' },
+  actions:        { gap: Spacing.sm, marginTop: Spacing.xl },
+  btnPrimary:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.lieDeVin, borderRadius: Radius.full, paddingVertical: 15 },
+  btnPrimaryText: { fontSize: 15, fontWeight: '700', color: Colors.white },
+  btnSecondary:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingVertical: 14, borderWidth: 1, borderColor: Colors.lieDeVin + '30' },
   btnSecondaryText:{ fontSize: 14, fontWeight: '600', color: Colors.lieDeVin },
-  btnGhost:        { alignItems: 'center', paddingVertical: 10 },
-  btnGhostText:    { fontSize: 13, color: Colors.brunMoyen },
+  btnGhost:       { alignItems: 'center', paddingVertical: 10 },
+  btnGhostText:   { fontSize: 13, color: Colors.brunMoyen },
 });

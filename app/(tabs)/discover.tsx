@@ -495,8 +495,17 @@ const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
   const matchBg    = rec.match === 'ideal' ? Colors.vertSaugeLight : rec.match === 'bon' ? Colors.blancDoreLight : Colors.cremeIvoire;
   const matchLabel = rec.match === 'ideal' ? 'Accord idéal' : rec.match === 'bon' ? 'Bon accord' : 'Accord possible';
 
+  const uniqueCaves = [...new Set(rec.allOccurrences.map(b => b.cave).filter(Boolean))] as string[];
+  const caveLabel   = uniqueCaves.length > 1
+    ? `${uniqueCaves.length} caves`
+    : (uniqueCaves[0] ?? rec.bottle.cave ?? '');
+
   return (
-    <View style={rc.card}>
+    <TouchableOpacity
+      style={rc.card}
+      onPress={() => router.push(`/bottle/${rec.bottle._id}` as any)}
+      activeOpacity={0.8}
+    >
       <View style={rc.rankBadge}>
         <Text style={rc.rankText}>#{rank}</Text>
       </View>
@@ -511,7 +520,10 @@ const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
         <View style={rc.meta}>
           {rec.bottle.couleur && <WineBadge couleur={rec.bottle.couleur} size="sm" />}
           {rec.bottle.annee ? <Text style={rc.year}>{rec.bottle.annee}</Text> : null}
-          <Text style={rc.cave}>{rec.bottle.cave}</Text>
+          {caveLabel ? <Text style={rc.cave}>{caveLabel}</Text> : null}
+          <Text style={rc.stock}>
+            {rec.totalQty} btl{uniqueCaves.length > 1 ? ` · ${uniqueCaves.length} caves` : ''}
+          </Text>
         </View>
         <Text style={rc.explanation}>{rec.explanation}</Text>
         {rec.factors.length > 0 && (
@@ -535,7 +547,7 @@ const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
         <Text style={rc.score}>{rec.score}</Text>
         <Text style={rc.scoreLabel}>pts</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -661,6 +673,7 @@ const rc = StyleSheet.create({
   meta:       { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 6 },
   year:       { fontSize: 11, color: Colors.brunClair },
   cave:       { fontSize: 11, color: Colors.brunClair, fontStyle: 'italic' },
+  stock:      { fontSize: 11, color: Colors.lieDeVin, fontWeight: '600' },
   explanation:{ fontSize: 13, color: Colors.brunMoyen, lineHeight: 18, fontStyle: 'italic', marginBottom: 4 },
   factors:    { gap: 3 },
   factor:     { flexDirection: 'row', alignItems: 'center', gap: 4 },

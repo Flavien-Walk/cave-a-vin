@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../src/constants';
-import { useBottleStore, useAuthStore, useCavesStore, useUIStore } from '../../src/stores';
+import { useBottleStore, useAuthStore, useCavesStore, useUIStore, useWishlistStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
 import ANECDOTES from '../../data/anecdotes';
@@ -19,14 +19,15 @@ export default function DashboardScreen() {
   const { user } = useAuthStore();
   const { caves, activeLieu, fetchCaves, setActiveLieu } = useCavesStore();
   const { setFilter } = useUIStore();
+  const { items: wishItems, fetchItems: fetchWishItems } = useWishlistStore();
   const [showLieuModal, setShowLieuModal] = useState(false);
 
   // Initial load (mount)
-  useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); }, []);
+  useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); fetchWishItems(); }, []);
 
   // Re-fetch quand l'écran revient au premier plan (changement de tab, retour depuis une page)
   useFocusEffect(
-    useCallback(() => { fetchBottles(); fetchStats(); }, [])
+    useCallback(() => { fetchBottles(); fetchStats(); fetchWishItems(); }, [])
   );
 
   // Lieux réels de l'utilisateur (dérivés des caves)
@@ -52,6 +53,8 @@ export default function DashboardScreen() {
     () => caveNamesInLieu ? bottles.filter(b => caveNamesInLieu.includes(b.cave ?? '')) : bottles,
     [bottles, caveNamesInLieu]
   );
+
+  const wishlistActive = useMemo(() => wishItems.filter(i => !i.isPurchased), [wishItems]);
 
   const favorites  = useMemo(() => bottlesInLieu.filter(b => b.isFavorite).slice(0, 3), [bottlesInLieu]);
   const recent     = useMemo(() => [...bottlesInLieu].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottlesInLieu]);
@@ -179,6 +182,45 @@ export default function DashboardScreen() {
           </Section>
         )}
 
+        {/* ── Wishlist ── */}
+        <TouchableOpacity
+          style={s.wishCard}
+          onPress={() => router.push('/(tabs)/discover')}
+          activeOpacity={0.85}
+        >
+          <View style={s.wishHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+              <Ionicons name="bookmark" size={15} color={Colors.lieDeVin} />
+              <Text style={s.wishTitle}>Ma liste d'envies</Text>
+              {wishlistActive.length > 0 && (
+                <View style={s.wishBadge}>
+                  <Text style={s.wishBadgeText}>{wishlistActive.length}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={s.wishCta}>Voir tout →</Text>
+          </View>
+          {wishlistActive.length === 0 ? (
+            <Text style={s.wishEmpty}>Aucun vin dans votre liste · Ajoutez-en dans Découvrir</Text>
+          ) : (
+            <>
+              {wishlistActive.slice(0, 3).map(item => (
+                <View key={item._id} style={s.wishItem}>
+                  <Ionicons
+                    name={item.priorite === 'haute' ? 'arrow-up-circle' : item.priorite === 'basse' ? 'arrow-down-circle' : 'remove-circle-outline'}
+                    size={13}
+                    color={item.priorite === 'haute' ? Colors.rougeAlerte : item.priorite === 'basse' ? Colors.brunClair : Colors.brunMoyen}
+                  />
+                  <Text style={s.wishItemNom} numberOfLines={1}>{item.nom}</Text>
+                </View>
+              ))}
+              {wishlistActive.length > 3 && (
+                <Text style={s.wishMore}>+{wishlistActive.length - 3} autre{wishlistActive.length - 3 > 1 ? 's' : ''}</Text>
+              )}
+            </>
+          )}
+        </TouchableOpacity>
+
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -305,6 +347,18 @@ const s = StyleSheet.create({
   sectionHead:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.brunMoka, letterSpacing: 0.2 },
   sectionMore:  { fontSize: 12, color: Colors.lieDeVin, fontWeight: '600' },
+
+  // Wishlist preview
+  wishCard:       { backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.xl, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', ...Shadow.sm },
+  wishHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+  wishTitle:      { fontSize: 14, fontWeight: '700', color: Colors.brunMoka },
+  wishBadge:      { backgroundColor: Colors.lieDeVin, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1, minWidth: 18, alignItems: 'center' },
+  wishBadgeText:  { fontSize: 11, fontWeight: '800', color: Colors.white },
+  wishCta:        { fontSize: 12, color: Colors.lieDeVin, fontWeight: '600' },
+  wishEmpty:      { fontSize: 12, color: Colors.brunClair, fontStyle: 'italic' },
+  wishItem:       { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 5, borderBottomWidth: 0.5, borderBottomColor: Colors.parchemin },
+  wishItemNom:    { flex: 1, fontSize: 13, color: Colors.brunMoyen, fontWeight: '500' },
+  wishMore:       { fontSize: 11, color: Colors.brunClair, marginTop: Spacing.sm, fontStyle: 'italic' },
 
   anecdote:      { backgroundColor: Colors.champagne, borderRadius: Radius.lg, padding: Spacing.lg, marginBottom: Spacing.xl, borderWidth: 1, borderColor: Colors.parchemin, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud },
   anecdoteHead:  { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: Spacing.sm },
