@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
+  Alert, Modal, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -20,7 +20,7 @@ const OCCASIONS = ['Repas du soir', 'Repas en famille', 'Repas romantique', 'Ap√
 
 export default function BottleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { bottles, toggleFavorite, drinkBottle, updateBottle, deleteNote, deleteBottle } = useBottleStore();
+  const { bottles, toggleFavorite, drinkBottle, updateBottle, deleteNote, deleteBottle, localPhotos } = useBottleStore();
   const insets = useSafeAreaInsets();
 
   const [bottle, setBottle]   = useState<Bottle | null>(bottles.find(b => b._id === id) ?? null);
@@ -69,10 +69,11 @@ export default function BottleDetailScreen() {
     );
   }
 
-  const avg     = getAverageNote(bottle);
-  const urgent  = isNearUrgent(bottle);
-  const gradient = getWineGradient(bottle.couleur);
+  const avg        = getAverageNote(bottle);
+  const urgent     = isNearUrgent(bottle);
+  const gradient   = getWineGradient(bottle.couleur);
   const formatLabel = FORMATS_BOUTEILLE.find(f => f.value === bottle.format)?.label ?? bottle.format;
+  const localPhoto = id ? (localPhotos[id] ?? null) : null;
 
   const handleToggleFavorite = async () => {
     await toggleFavorite(bottle._id);
@@ -159,6 +160,10 @@ export default function BottleDetailScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerContent}>
+          {/* Photo locale si disponible */}
+          {localPhoto && (
+            <Image source={{ uri: localPhoto }} style={styles.headerPhoto} />
+          )}
           <Text style={styles.nom} numberOfLines={2}>{bottle.nom}</Text>
           {bottle.producteur ? <Text style={styles.producteur}>{bottle.producteur}</Text> : null}
           {bottle.annee ? <Text style={styles.annee}>{bottle.annee}</Text> : null}
@@ -428,6 +433,7 @@ const styles = StyleSheet.create({
   gradientHeader: { paddingTop: Spacing.md, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, position: 'relative' },
   backBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
   headerContent:  { gap: 4 },
+  headerPhoto:    { width: 64, height: 80, borderRadius: Radius.sm, marginBottom: Spacing.sm, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
   nom:            { ...Typography.h1, color: Colors.white },
   producteur:     { ...Typography.body, color: 'rgba(255,255,255,0.85)', fontStyle: 'italic' },
   annee:          { fontSize: 28, fontWeight: '300', color: 'rgba(255,255,255,0.7)' },

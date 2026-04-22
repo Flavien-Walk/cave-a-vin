@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, KeyboardAvoidingView, Platform, ActivityIndicator,
+  Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Colors, Spacing, Radius } from '../src/constants';
 import { COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../src/constants';
 import { useBottleStore, useCavesStore } from '../src/stores';
@@ -23,8 +24,15 @@ const formatOptions: SelectOption[]  = FORMATS_BOUTEILLE.map(f => ({ label: f.la
 
 export default function EditBottleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { bottles, updateBottle } = useBottleStore();
+  const { bottles, updateBottle, localPhotos, updateLocalPhoto } = useBottleStore();
   const { caves, fetchCaves } = useCavesStore();
+
+  // Photo
+  const [photoUri, setPhotoUri]     = useState<string | null>(id ? (localPhotos[id] ?? null) : null);
+  const [showCam, setShowCam]       = useState(false);
+  const [capturing, setCapturing]   = useState(false);
+  const [permission, requestPerm]   = useCameraPermissions();
+  const cameraRef                   = useRef<any>(null);
 
   const storeBottle = bottles.find(b => b._id === id);
   const [loading, setLoading] = useState(!storeBottle);
@@ -46,7 +54,40 @@ export default function EditBottleScreen() {
   const [cave,          setCave]          = useState(storeBottle?.cave ?? '');
   const [emplacement,   setEmplacement]   = useState(storeBottle?.emplacement ?? '');
 
-  useEffect(() => { fetchCaves(); }, []);
+  useEffect(() => {
+    fetchCaves();
+    // Sync photo when id becomes available
+    if (id) setPhotoUri(localPhotos[id] ?? null);
+  }, [id]);
+
+  const openCamera = async () => {
+    if (!permission?.granted) {
+      const res = await requestPerm();
+      if (!res.granted) { Alert.alert('Permission refusée', 'Autorisez la caméra dans les réglages.'); return; }
+    }
+    setShowCam(true);
+  };
+
+  const takePhoto = async () => {
+    if (!cameraRef.current || capturing) return;
+    setCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.92, base64: false, exif: false });
+      setPhotoUri(photo.uri);
+      setShowCam(false);
+    } catch {
+      Alert.alert('Erreur', 'Impossible de prendre la photo.');
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const removePhoto = () => {
+    Alert.alert('Supprimer la photo ?', undefined, [
+      { text: 'Annuler' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => setPhotoUri(null) },
+    ]);
+  };
 
   useEffect(() => {
     if (!storeBottle && id) {
@@ -111,6 +152,14 @@ export default function EditBottleScreen() {
         cave,
         emplacement,
       });
+
+      // Gérer le changement de photo localement
+      const currentPhoto = localPhotos[id!] ?? null;
+      const photoChanged = photoUri !== currentPhoto;
+      if (photoChanged) {
+        await updateLocalPhoto(id!, photoUri);
+      }
+
       router.back();
     } catch (e: any) {
       Alert.alert('Erreur', e.message);
@@ -149,7 +198,32 @@ export default function EditBottleScreen() {
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="on-drag"
         >
-          <Text style={s.sectionLabel}>Identité</Text>
+          {/* ── Photo ── */}
+          <Text style={s.sectionLabel}>Photo</Text>
+          {photoUri ? (
+            <View style={s.photoRow}>
+              <Image source={{ uri: photoUri }} style={s.photoThumb} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.photoTitle}>Photo enregistrée</Text>
+                <Text style={s.photoSub}>Stockée localement sur cet appareil</Text>
+              </View>
+              <View style={s.photoActions}>
+                <TouchableOpacity onPress={openCamera} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="camera-outline" size={20} color={Colors.lieDeVin} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={removePhoto} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle-outline" size={20} color={Colors.rougeAlerte} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={s.photoAdd} onPress={openCamera} activeOpacity={0.8}>
+              <Ionicons name="camera-outline" size={22} color={Colors.lieDeVin} />
+              <Text style={s.photoAddText}>Ajouter une photo</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={[s.sectionLabel, { marginTop: Spacing.lg }]}>Identité</Text>
           <Input label="Nom du vin" value={nom} onChangeText={setNom} required placeholder="ex : Château Margaux" />
           <Input label="Producteur / Domaine" value={producteur} onChangeText={setProducteur} placeholder="ex : Château Margaux" />
           <SelectModal label="Couleur" value={couleur} options={couleurOptions} onChange={v => setCouleur(v as CouleurVin)} placeholder="Sélectionner" searchable={false} />
@@ -198,6 +272,31 @@ export default function EditBottleScreen() {
           />
         </View>
       </KeyboardAvoidingView>
+
+      {/* Caméra pour photo */}
+      <Modal visible={showCam} animationType="slide">
+        <View style={cam.container}>
+          <CameraView ref={cameraRef} style={cam.camera} facing="back">
+            <View style={cam.overlay}>
+              <View style={cam.topBar}>
+                <TouchableOpacity style={cam.close} onPress={() => setShowCam(false)}>
+                  <Ionicons name="close" size={24} color={Colors.white} />
+                </TouchableOpacity>
+                <Text style={cam.title}>Photo de la bouteille</Text>
+                <View style={{ width: 40 }} />
+              </View>
+              <View style={cam.shutterArea}>
+                <TouchableOpacity style={cam.shutter} onPress={takePhoto} disabled={capturing} activeOpacity={0.8}>
+                  {capturing
+                    ? <ActivityIndicator color={Colors.white} size="large" />
+                    : <View style={cam.shutterInner} />
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </CameraView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -210,4 +309,25 @@ const s = StyleSheet.create({
   form:        { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
   sectionLabel:{ fontSize: 11, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 1, textTransform: 'uppercase', marginBottom: Spacing.md },
   footer:      { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.md, backgroundColor: Colors.champagne, borderTopWidth: 1, borderTopColor: Colors.parchemin },
+
+  // Photo section
+  photoRow:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.vertSaugeLight, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.vertSauge + '50', padding: Spacing.sm, marginBottom: Spacing.lg },
+  photoThumb:   { width: 56, height: 72, borderRadius: Radius.sm, backgroundColor: Colors.parchemin },
+  photoTitle:   { fontSize: 13, fontWeight: '700', color: Colors.vertSauge },
+  photoSub:     { fontSize: 11, color: Colors.brunMoyen, marginTop: 2 },
+  photoActions: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
+  photoAdd:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.champagne, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', borderStyle: 'dashed', padding: Spacing.lg, marginBottom: Spacing.lg },
+  photoAddText: { fontSize: 14, fontWeight: '600', color: Colors.lieDeVin },
+});
+
+const cam = StyleSheet.create({
+  container:    { flex: 1, backgroundColor: '#000' },
+  camera:       { flex: 1 },
+  overlay:      { flex: 1, justifyContent: 'space-between', backgroundColor: 'transparent' },
+  topBar:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingHorizontal: Spacing.lg },
+  close:        { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  title:        { fontSize: 16, fontWeight: '700', color: Colors.white },
+  shutterArea:  { paddingBottom: 56, alignItems: 'center' },
+  shutter:      { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: 'rgba(255,255,255,0.5)' },
+  shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.parchemin },
 });

@@ -271,13 +271,7 @@ export default function AddScreen() {
           <Ionicons name="arrow-back" size={20} color={Colors.brunMoka} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Ajouter une bouteille</Text>
-        {step === 0
-          ? <TouchableOpacity style={s.scanBtn} onPress={() => openCamera(true)}>
-              <Ionicons name="scan-outline" size={18} color={Colors.lieDeVin} />
-              <Text style={s.scanBtnText}>Scanner</Text>
-            </TouchableOpacity>
-          : <View style={{ width: 80 }} />
-        }
+        <View style={{ width: 36 }} />
       </View>
 
       {/* Stepper */}

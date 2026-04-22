@@ -60,6 +60,7 @@ interface BottleState {
   fetchStats: () => Promise<void>;
   addBottle: (data: CreateBottleDto, localPhotoUri?: string) => Promise<void>;
   updateBottle: (id: string, data: UpdateBottleDto) => Promise<void>;
+  updateLocalPhoto: (id: string, photoUri: string | null) => Promise<void>;
   deleteBottle: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   drinkBottle: (id: string, payload: { quantity?: number; note?: number; comment?: string; occasion?: string }) => Promise<void>;
@@ -122,6 +123,27 @@ export const useBottleStore = create<BottleState>((set, get) => ({
   updateBottle: async (id, data) => {
     const updated = await bottlesApi.update(id, data);
     set(s => ({ bottles: s.bottles.map(b => b._id === id ? updated : b) }));
+  },
+
+  updateLocalPhoto: async (id, photoUri) => {
+    const current = get().localPhotos;
+    if (photoUri === null) {
+      // Supprimer
+      if (current[id]) deletePhotoLocally(current[id]);
+      const newMap = { ...current };
+      delete newMap[id];
+      set({ localPhotos: newMap });
+      persistLocalPhotos(newMap);
+    } else {
+      // Remplacer/ajouter
+      if (current[id]) deletePhotoLocally(current[id]);
+      const localPath = await savePhotoLocally(id, photoUri);
+      if (localPath) {
+        const newMap = { ...current, [id]: localPath };
+        set({ localPhotos: newMap });
+        persistLocalPhotos(newMap);
+      }
+    }
   },
 
   deleteBottle: async (id) => {

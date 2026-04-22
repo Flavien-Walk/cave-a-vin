@@ -7,10 +7,8 @@ import { Colors, Spacing, Radius, Shadow } from '../../src/constants';
 import { useBottleStore, useAuthStore, useCavesStore, useUIStore, useWishlistStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
-import ANECDOTES from '../../data/anecdotes';
 
-const TODAY    = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-const ANECDOTE = ANECDOTES[Math.floor(Math.random() * ANECDOTES.length)];
+const TODAY = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
 type LieuEntry = { lieu: string; nbCaves: number; nbBottles: number };
 
@@ -22,15 +20,9 @@ export default function DashboardScreen() {
   const { items: wishItems, fetchItems: fetchWishItems } = useWishlistStore();
   const [showLieuModal, setShowLieuModal] = useState(false);
 
-  // Initial load (mount)
   useEffect(() => { fetchBottles(); fetchStats(); fetchCaves(); fetchWishItems(); }, []);
+  useFocusEffect(useCallback(() => { fetchBottles(); fetchStats(); fetchWishItems(); }, []));
 
-  // Re-fetch quand l'écran revient au premier plan (changement de tab, retour depuis une page)
-  useFocusEffect(
-    useCallback(() => { fetchBottles(); fetchStats(); fetchWishItems(); }, [])
-  );
-
-  // Lieux réels de l'utilisateur (dérivés des caves)
   const lieuEntries = useMemo<LieuEntry[]>(() => {
     const lieus = [...new Set(caves.map(c => c.location).filter(Boolean))] as string[];
     return lieus.map(lieu => {
@@ -41,14 +33,12 @@ export default function DashboardScreen() {
     });
   }, [caves, bottles]);
 
-  // Noms des caves du lieu actif — null = pas de filtre (aucun lieu ou aucune cave)
   const caveNamesInLieu = useMemo(() => {
     if (!activeLieu) return null;
     const names = caves.filter(c => c.location === activeLieu).map(c => c.name);
     return names.length > 0 ? names : null;
   }, [caves, activeLieu]);
 
-  // Bouteilles du lieu actif seulement
   const bottlesInLieu = useMemo(
     () => caveNamesInLieu ? bottles.filter(b => caveNamesInLieu.includes(b.cave ?? '')) : bottles,
     [bottles, caveNamesInLieu]
@@ -56,10 +46,19 @@ export default function DashboardScreen() {
 
   const wishlistActive = useMemo(() => wishItems.filter(i => !i.isPurchased), [wishItems]);
 
-  const favorites  = useMemo(() => bottlesInLieu.filter(b => b.isFavorite).slice(0, 3), [bottlesInLieu]);
-  const recent     = useMemo(() => [...bottlesInLieu].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3), [bottlesInLieu]);
+  const highlights = useMemo(() => {
+    const favs   = bottlesInLieu.filter(b => b.isFavorite);
+    const recent = [...bottlesInLieu].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const seen   = new Set<string>();
+    const merged: typeof bottles = [];
+    for (const b of [...favs, ...recent]) {
+      if (!seen.has(b._id)) { seen.add(b._id); merged.push(b); }
+      if (merged.length >= 4) break;
+    }
+    return merged;
+  }, [bottlesInLieu]);
+
   const urgentList = useMemo(() => bottlesInLieu.filter(b => isUrgent(b) && b.quantite > 0), [bottlesInLieu]);
-  const lowStock   = useMemo(() => bottlesInLieu.filter(b => b.quantite === 1 && !isUrgent(b)), [bottlesInLieu]);
 
   const firstName = user?.name?.split(' ')[0] ?? 'vous';
 
@@ -70,15 +69,32 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => { fetchBottles(); fetchStats(); }} tintColor={Colors.lieDeVin} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── En-tête ── */}
+
+        {/* ── Header ── */}
         <View style={s.header}>
           <View>
+            <Text style={s.brand}>CAVOU</Text>
+            <Text style={s.greeting}>Bonjour, {firstName}</Text>
             <Text style={s.date}>{TODAY.charAt(0).toUpperCase() + TODAY.slice(1)}</Text>
-            <Text style={s.appName}>Bonjour, {firstName}</Text>
           </View>
-          <TouchableOpacity style={s.avatarBtn} onPress={() => router.push('/profile' as any)}>
-            <Text style={s.avatarInitial}>{(user?.name?.[0] ?? '?').toUpperCase()}</Text>
-          </TouchableOpacity>
+          <View style={s.headerRight}>
+            {/* Wishlist badge — accès premium discret */}
+            <TouchableOpacity
+              style={s.wishBtn}
+              onPress={() => router.push('/(tabs)/discover')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="bookmark-outline" size={20} color={Colors.lieDeVin} />
+              {wishlistActive.length > 0 && (
+                <View style={s.wishBadge}>
+                  <Text style={s.wishBadgeText}>{wishlistActive.length > 9 ? '9+' : wishlistActive.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={s.avatarBtn} onPress={() => router.push('/profile' as any)}>
+              <Text style={s.avatarInitial}>{(user?.name?.[0] ?? '?').toUpperCase()}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ── Onboarding : aucune cave ── */}
@@ -95,52 +111,90 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Lieu actif + switch ── */}
-        {caves.length > 0 && lieuEntries.length > 0 && (
-          <View style={s.lieuBar}>
-            <TouchableOpacity
-              style={s.lieuSwitch}
-              onPress={() => lieuEntries.length > 1 && setShowLieuModal(true)}
-              activeOpacity={lieuEntries.length > 1 ? 0.7 : 1}
-            >
-              <Ionicons name="location" size={13} color={Colors.lieDeVin} />
-              <Text style={s.lieuSwitchText} numberOfLines={1}>{activeLieu ?? 'Mon lieu'}</Text>
-              {lieuEntries.length > 1 && (
-                <Ionicons name="chevron-down" size={14} color={Colors.lieDeVin} />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.manageBtn} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.75}>
-              <Ionicons name="home-outline" size={12} color={Colors.lieDeVin} />
-              <Text style={s.manageBtnText}>Mes caves</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* ── Stats compactes ── */}
         {!isStatsLoading && stats && (
-          <View style={s.statsCard}>
-            <StatCell value={stats.totalBottles.toLocaleString('fr-FR')} label="bouteilles" onPress={() => router.push('/(tabs)/cave')} />
-            <View style={s.sep} />
-            <StatCell value={stats.totalReferences.toString()} label="références" onPress={() => router.push('/(tabs)/cave')} />
-            <View style={s.sep} />
-            <StatCell value={formatPrice(stats.totalValue)} label="valeur" gold onPress={() => router.push('/cave-value' as any)} />
+          <View style={s.statsRow}>
+            <TouchableOpacity style={s.statPill} onPress={() => router.push('/(tabs)/cave')} activeOpacity={0.75}>
+              <Text style={s.statValue}>{stats.totalBottles.toLocaleString('fr-FR')}</Text>
+              <Text style={s.statLabel}>bouteilles</Text>
+            </TouchableOpacity>
+            <View style={s.statDivider} />
+            <TouchableOpacity style={s.statPill} onPress={() => router.push('/(tabs)/cave')} activeOpacity={0.75}>
+              <Text style={s.statValue}>{stats.totalReferences}</Text>
+              <Text style={s.statLabel}>références</Text>
+            </TouchableOpacity>
+            <View style={s.statDivider} />
+            <TouchableOpacity style={s.statPill} onPress={() => router.push('/cave-value' as any)} activeOpacity={0.75}>
+              <Text style={[s.statValue, { color: Colors.ambreChaud }]}>{formatPrice(stats.totalValue)}</Text>
+              <Text style={s.statLabel}>valeur estimée</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* ── Alertes urgence ── */}
+        {/* ── Actions rapides ── */}
+        <View style={s.actionsRow}>
+          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/add')} activeOpacity={0.8}>
+            <View style={s.actionIcon}>
+              <Ionicons name="add" size={20} color={Colors.lieDeVin} />
+            </View>
+            <Text style={s.actionLabel}>Ajouter</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/cave')} activeOpacity={0.8}>
+            <View style={s.actionIcon}>
+              <Ionicons name="wine-outline" size={20} color={Colors.lieDeVin} />
+            </View>
+            <Text style={s.actionLabel}>Ma cave</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/discover')} activeOpacity={0.8}>
+            <View style={s.actionIcon}>
+              <Ionicons name="compass-outline" size={20} color={Colors.lieDeVin} />
+            </View>
+            <Text style={s.actionLabel}>Découvrir</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/stats')} activeOpacity={0.8}>
+            <View style={s.actionIcon}>
+              <Ionicons name="stats-chart-outline" size={20} color={Colors.lieDeVin} />
+            </View>
+            <Text style={s.actionLabel}>Stats</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Lieu actif + switch ── */}
+        {caves.length > 0 && lieuEntries.length > 1 && (
+          <TouchableOpacity
+            style={s.lieuSwitch}
+            onPress={() => setShowLieuModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="location" size={13} color={Colors.lieDeVin} />
+            <Text style={s.lieuSwitchText} numberOfLines={1}>{activeLieu ?? 'Tous les lieux'}</Text>
+            <Ionicons name="chevron-down" size={13} color={Colors.lieDeVin} />
+          </TouchableOpacity>
+        )}
+
+        {/* ── Alerte urgence ── */}
         {urgentList.length > 0 && (
           <TouchableOpacity style={s.alert} onPress={() => router.push('/(tabs)/discover')} activeOpacity={0.8}>
             <View style={s.alertDot} />
-            <Text style={s.alertText}>{urgentList.length} bouteille{urgentList.length > 1 ? 's' : ''} à consommer rapidement</Text>
+            <Text style={s.alertText}>
+              {urgentList.length} bouteille{urgentList.length > 1 ? 's' : ''} à consommer bientôt
+            </Text>
             <Ionicons name="chevron-forward" size={14} color={Colors.rougeAlerte} />
           </TouchableOpacity>
         )}
 
-        {/* ── Stock faible ── */}
-        {lowStock.length > 0 && (
-          <View style={s.alertInfo}>
-            <Ionicons name="alert-circle-outline" size={14} color={Colors.ambreChaud} />
-            <Text style={s.alertInfoText}>{lowStock.length} bouteille{lowStock.length > 1 ? 's' : ''} en dernière unité</Text>
+        {/* ── Sélection principale ── */}
+        {!isLoading && highlights.length > 0 && (
+          <View style={s.section}>
+            <View style={s.sectionHead}>
+              <Text style={s.sectionTitle}>À la une</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/cave')}>
+                <Text style={s.sectionMore}>Voir tout</Text>
+              </TouchableOpacity>
+            </View>
+            {highlights.map(b => (
+              <BottleCard key={b._id} bottle={b} onPress={() => router.push(('/bottle/' + b._id) as any)} />
+            ))}
           </View>
         )}
 
@@ -152,74 +206,12 @@ export default function DashboardScreen() {
             </View>
             <Text style={s.emptyTitle}>Cave vide</Text>
             <Text style={s.emptyText}>Appuyez sur + pour ajouter votre première bouteille</Text>
+            <TouchableOpacity style={s.emptyBtn} onPress={() => router.push('/(tabs)/add')} activeOpacity={0.8}>
+              <Ionicons name="add" size={16} color={Colors.white} />
+              <Text style={s.emptyBtnText}>Ajouter une bouteille</Text>
+            </TouchableOpacity>
           </View>
         )}
-
-        {/* ── Anecdote ── */}
-        <View style={s.anecdote}>
-          <View style={s.anecdoteHead}>
-            <Ionicons name="bulb-outline" size={13} color={Colors.ambreChaud} />
-            <Text style={s.anecdoteLabel}>LE SAVIEZ-VOUS ?</Text>
-          </View>
-          <Text style={s.anecdoteText}>{ANECDOTE}</Text>
-        </View>
-
-        {/* ── Favoris ── */}
-        {favorites.length > 0 && (
-          <Section title="Favoris" icon="heart-outline" onMore={() => router.push('/cave-filtered?filter=favoritesOnly' as any)}>
-            {favorites.map(b => (
-              <BottleCard key={b._id} bottle={b} onPress={() => router.push(('/bottle/' + b._id) as any)} />
-            ))}
-          </Section>
-        )}
-
-        {/* ── Ajouts récents ── */}
-        {recent.length > 0 && (
-          <Section title="Ajouts récents" icon="time-outline" onMore={() => router.push('/(tabs)/cave')}>
-            {recent.map(b => (
-              <BottleCard key={b._id} bottle={b} onPress={() => router.push(('/bottle/' + b._id) as any)} />
-            ))}
-          </Section>
-        )}
-
-        {/* ── Wishlist ── */}
-        <TouchableOpacity
-          style={s.wishCard}
-          onPress={() => router.push('/(tabs)/discover')}
-          activeOpacity={0.85}
-        >
-          <View style={s.wishHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-              <Ionicons name="bookmark" size={15} color={Colors.lieDeVin} />
-              <Text style={s.wishTitle}>Ma liste d'envies</Text>
-              {wishlistActive.length > 0 && (
-                <View style={s.wishBadge}>
-                  <Text style={s.wishBadgeText}>{wishlistActive.length}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={s.wishCta}>Voir tout →</Text>
-          </View>
-          {wishlistActive.length === 0 ? (
-            <Text style={s.wishEmpty}>Aucun vin dans votre liste · Ajoutez-en dans Découvrir</Text>
-          ) : (
-            <>
-              {wishlistActive.slice(0, 3).map(item => (
-                <View key={item._id} style={s.wishItem}>
-                  <Ionicons
-                    name={item.priorite === 'haute' ? 'arrow-up-circle' : item.priorite === 'basse' ? 'arrow-down-circle' : 'remove-circle-outline'}
-                    size={13}
-                    color={item.priorite === 'haute' ? Colors.rougeAlerte : item.priorite === 'basse' ? Colors.brunClair : Colors.brunMoyen}
-                  />
-                  <Text style={s.wishItemNom} numberOfLines={1}>{item.nom}</Text>
-                </View>
-              ))}
-              {wishlistActive.length > 3 && (
-                <Text style={s.wishMore}>+{wishlistActive.length - 3} autre{wishlistActive.length - 3 > 1 ? 's' : ''}</Text>
-              )}
-            </>
-          )}
-        </TouchableOpacity>
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -259,58 +251,68 @@ export default function DashboardScreen() {
   );
 }
 
-const StatCell = ({ value, label, gold, onPress }: { value: string; label: string; gold?: boolean; onPress?: () => void }) => {
-  const Wrapper = onPress ? TouchableOpacity : View;
-  return (
-    <Wrapper style={s.statCell} onPress={onPress} activeOpacity={0.7}>
-      <Text style={[s.statValue, gold && { color: Colors.ambreChaud }]}>{value}</Text>
-      <Text style={s.statLabel}>{label}</Text>
-    </Wrapper>
-  );
-};
-
-const Section = ({ title, icon, onMore, children }: { title: string; icon: any; onMore?: () => void; children: React.ReactNode }) => (
-  <View style={s.section}>
-    <View style={s.sectionHead}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Ionicons name={icon} size={13} color={Colors.lieDeVin} />
-        <Text style={s.sectionTitle}>{title}</Text>
-      </View>
-      {onMore && (
-        <TouchableOpacity onPress={onMore}>
-          <Text style={s.sectionMore}>Voir tout</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-    {children}
-  </View>
-);
-
 const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.cremeIvoire },
-  scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
 
-  header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  date:          { fontSize: 12, color: Colors.brunClair, textTransform: 'capitalize', letterSpacing: 0.3 },
-  appName:       { fontSize: 22, fontWeight: '800', color: Colors.brunMoka, letterSpacing: -0.3, marginTop: 2 },
+  // Header
+  header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.lg },
+  brand:         { fontSize: 11, fontWeight: '900', color: Colors.lieDeVin, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 },
+  greeting:      { fontSize: 22, fontWeight: '800', color: Colors.brunMoka, letterSpacing: -0.3 },
+  date:          { fontSize: 12, color: Colors.brunClair, marginTop: 2, textTransform: 'capitalize' },
+  headerRight:   { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingTop: 4 },
+
+  // Wishlist badge dans header
+  wishBtn:       { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  wishBadge:     { position: 'absolute', top: -3, right: -3, backgroundColor: Colors.lieDeVin, borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  wishBadgeText: { fontSize: 10, fontWeight: '800', color: Colors.white },
+
   avatarBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.lieDeVin, alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { fontSize: 16, fontWeight: '700', color: Colors.white },
 
   // Onboarding
-  onboardingCard:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.md, borderWidth: 1.5, borderColor: Colors.lieDeVin, ...Shadow.sm },
-  onboardingIcon:  { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.cremeIvoire, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
-  onboardingTitle: { fontSize: 15, fontWeight: '800', color: Colors.brunMoka, marginBottom: 3 },
+  onboardingCard:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', ...Shadow.sm },
+  onboardingIcon:  { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.rougeVinLight, borderWidth: 1, borderColor: Colors.lieDeVin + '20', alignItems: 'center', justifyContent: 'center' },
+  onboardingTitle: { fontSize: 15, fontWeight: '800', color: Colors.brunMoka, marginBottom: 2 },
   onboardingText:  { fontSize: 12, color: Colors.brunMoyen, lineHeight: 17 },
 
-  // Lieu — barre compacte avec switch
-  lieuBar:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
-  lieuSwitch:    { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, backgroundColor: Colors.champagne, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1.5, borderColor: Colors.lieDeVin + '40', ...Shadow.sm },
-  lieuSwitchText:{ flex: 1, fontSize: 14, fontWeight: '700', color: Colors.lieDeVin },
+  // Stats — row épuré
+  statsRow:    { flexDirection: 'row', backgroundColor: Colors.lieDeVin, borderRadius: Radius.xl, paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md, marginBottom: Spacing.lg, ...Shadow.sm },
+  statPill:    { flex: 1, alignItems: 'center' },
+  statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
+  statValue:   { fontSize: 18, fontWeight: '800', color: Colors.white, letterSpacing: -0.3 },
+  statLabel:   { fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
 
-  manageBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 9, borderRadius: Radius.full, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, flexShrink: 0 },
-  manageBtnText: { fontSize: 11, fontWeight: '600', color: Colors.brunMoyen },
+  // Actions rapides
+  actionsRow:   { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  actionBtn:    { flex: 1, alignItems: 'center', gap: 6 },
+  actionIcon:   { width: 48, height: 48, borderRadius: Radius.lg, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center', ...Shadow.sm },
+  actionLabel:  { fontSize: 11, fontWeight: '600', color: Colors.brunMoyen },
 
-  // Modal sélection lieu
+  // Lieu switch compact
+  lieuSwitch:    { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 8, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin, alignSelf: 'flex-start' },
+  lieuSwitchText:{ fontSize: 13, fontWeight: '600', color: Colors.lieDeVin },
+
+  // Alerte urgence
+  alert:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.rougeAlerteLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.lg, borderLeftWidth: 3, borderLeftColor: Colors.rougeAlerte },
+  alertDot:  { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.rougeAlerte },
+  alertText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.rougeAlerte },
+
+  // Section principale
+  section:      { marginBottom: Spacing.xl },
+  sectionHead:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.brunMoka },
+  sectionMore:  { fontSize: 12, color: Colors.lieDeVin, fontWeight: '600' },
+
+  // Cave vide
+  empty:      { alignItems: 'center', paddingVertical: Spacing.xxxl * 2, gap: Spacing.md },
+  emptyIcon:  { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.brunMoyen },
+  emptyText:  { fontSize: 13, color: Colors.brunClair, textAlign: 'center', lineHeight: 20 },
+  emptyBtn:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.lieDeVin, borderRadius: Radius.full, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, marginTop: 4 },
+  emptyBtnText:{ fontSize: 14, fontWeight: '700', color: Colors.white },
+
+  // Modal lieu
   overlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   sheet:     { backgroundColor: Colors.champagne, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingHorizontal: Spacing.lg, paddingBottom: 36, paddingTop: Spacing.md },
   sheetHandle:{ width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.parchemin, alignSelf: 'center', marginBottom: Spacing.lg },
@@ -322,46 +324,4 @@ const s = StyleSheet.create({
   sheetItemCount:      { fontSize: 12, color: Colors.brunClair, marginTop: 1 },
   sheetManage:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.parchemin },
   sheetManageText: { fontSize: 13, color: Colors.brunMoyen },
-
-  // Stats
-  statsCard: { flexDirection: 'row', backgroundColor: Colors.lieDeVin, borderRadius: Radius.xl, paddingVertical: Spacing.lg, paddingHorizontal: Spacing.md, marginBottom: Spacing.md, ...Shadow.sm },
-  statCell:  { flex: 1, alignItems: 'center' },
-  sep:       { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
-  statValue: { fontSize: 20, fontWeight: '800', color: Colors.white },
-  statLabel: { fontSize: 10, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-
-  // Alertes
-  alert:         { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.rougeAlerteLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.sm, borderLeftWidth: 3, borderLeftColor: Colors.rougeAlerte },
-  alertDot:      { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.rougeAlerte },
-  alertText:     { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.rougeAlerte },
-  alertInfo:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.ambreChaudLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud },
-  alertInfoText: { flex: 1, fontSize: 13, fontWeight: '500', color: Colors.ambreChaud },
-
-  // Empty
-  empty:      { alignItems: 'center', paddingVertical: Spacing.xxxl * 2, gap: Spacing.md },
-  emptyIcon:  { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.brunMoyen },
-  emptyText:  { fontSize: 13, color: Colors.brunClair, textAlign: 'center', lineHeight: 20 },
-
-  section:      { marginBottom: Spacing.xl },
-  sectionHead:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.brunMoka, letterSpacing: 0.2 },
-  sectionMore:  { fontSize: 12, color: Colors.lieDeVin, fontWeight: '600' },
-
-  // Wishlist preview
-  wishCard:       { backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.xl, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', ...Shadow.sm },
-  wishHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  wishTitle:      { fontSize: 14, fontWeight: '700', color: Colors.brunMoka },
-  wishBadge:      { backgroundColor: Colors.lieDeVin, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1, minWidth: 18, alignItems: 'center' },
-  wishBadgeText:  { fontSize: 11, fontWeight: '800', color: Colors.white },
-  wishCta:        { fontSize: 12, color: Colors.lieDeVin, fontWeight: '600' },
-  wishEmpty:      { fontSize: 12, color: Colors.brunClair, fontStyle: 'italic' },
-  wishItem:       { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 5, borderBottomWidth: 0.5, borderBottomColor: Colors.parchemin },
-  wishItemNom:    { flex: 1, fontSize: 13, color: Colors.brunMoyen, fontWeight: '500' },
-  wishMore:       { fontSize: 11, color: Colors.brunClair, marginTop: Spacing.sm, fontStyle: 'italic' },
-
-  anecdote:      { backgroundColor: Colors.champagne, borderRadius: Radius.lg, padding: Spacing.lg, marginBottom: Spacing.xl, borderWidth: 1, borderColor: Colors.parchemin, borderLeftWidth: 3, borderLeftColor: Colors.ambreChaud },
-  anecdoteHead:  { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: Spacing.sm },
-  anecdoteLabel: { fontSize: 10, fontWeight: '700', color: Colors.ambreChaud, letterSpacing: 1 },
-  anecdoteText:  { fontSize: 13, color: Colors.brunMoyen, lineHeight: 20, fontStyle: 'italic' },
 });

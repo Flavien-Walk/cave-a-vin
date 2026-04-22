@@ -139,7 +139,8 @@ export function ServerWakeup({ onReady }: Props) {
         <View style={s.logoRing}>
           <Text style={s.logoEmoji}>🍷</Text>
         </View>
-        <Text style={s.appTitle}>Cave à vin</Text>
+        <Text style={s.appTitle}>CAVOU</Text>
+        <Text style={s.appSub}>C'est votre cave</Text>
 
         {/* Progress glass */}
         <View style={s.glassWrap}>
@@ -237,7 +238,8 @@ const s = StyleSheet.create({
     marginBottom: 4,
   },
   logoEmoji: { fontSize: 32 },
-  appTitle:  { fontSize: 22, fontWeight: '900', color: Colors.lieDeVin, letterSpacing: -0.5, marginBottom: 4 },
+  appTitle:  { fontSize: 28, fontWeight: '900', color: Colors.lieDeVin, letterSpacing: 6, textTransform: 'uppercase', marginBottom: 2 },
+  appSub:    { fontSize: 10, fontWeight: '600', color: Colors.brunClair, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
 
   // Mini wine glass progress indicator
   glassWrap: {
