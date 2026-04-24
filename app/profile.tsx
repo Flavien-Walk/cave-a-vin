@@ -1,21 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator, TextInput,
+  Alert, ActivityIndicator, TextInput, Image, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../src/constants';
 import { useAuthStore, useBottleStore } from '../src/stores';
 
 export default function ProfileScreen() {
-  const { user, logout, updateMe } = useAuthStore();
+  const { user, logout, updateMe, profilePhotoUri, setProfilePhoto } = useAuthStore();
   const { bottles } = useBottleStore();
 
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName]         = useState(user?.name ?? '');
   const [savingName, setSavingName]   = useState(false);
+
+  // Photo de profil
+  const [showCam, setShowCam]     = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [permission, requestPerm] = useCameraPermissions();
+  const cameraRef                 = useRef<any>(null);
+
+  const openCamera = async () => {
+    if (!permission?.granted) {
+      const res = await requestPerm();
+      if (!res.granted) { Alert.alert('Permission refusée', 'Autorisez la caméra dans les réglages.'); return; }
+    }
+    setShowCam(true);
+  };
+
+  const takeProfilePhoto = async () => {
+    if (!cameraRef.current || capturing) return;
+    setCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
+      await setProfilePhoto(photo.uri);
+      setShowCam(false);
+    } catch {
+      Alert.alert('Erreur', 'Impossible de prendre la photo.');
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const removeProfilePhoto = () => {
+    Alert.alert('Supprimer la photo de profil ?', undefined, [
+      { text: 'Annuler' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => setProfilePhoto(null) },
+    ]);
+  };
 
   const totalBottles = bottles.reduce((s, b) => s + b.quantite, 0);
   const memberSince  = user?.createdAt
@@ -68,8 +104,23 @@ export default function ProfileScreen() {
 
         {/* Avatar + nom */}
         <View style={s.avatarSection}>
-          <View style={s.avatar}>
-            <Text style={s.avatarText}>{(user?.name?.[0] ?? '?').toUpperCase()}</Text>
+          <View style={s.avatarWrap}>
+            {profilePhotoUri
+              ? <Image source={{ uri: profilePhotoUri }} style={s.avatarPhoto} />
+              : (
+                <View style={s.avatar}>
+                  <Text style={s.avatarText}>{(user?.name?.[0] ?? '?').toUpperCase()}</Text>
+                </View>
+              )
+            }
+            <TouchableOpacity style={s.avatarEditBtn} onPress={openCamera} activeOpacity={0.8}>
+              <Ionicons name="camera" size={14} color={Colors.white} />
+            </TouchableOpacity>
+            {profilePhotoUri && (
+              <TouchableOpacity style={s.avatarDeleteBtn} onPress={removeProfilePhoto} activeOpacity={0.8}>
+                <Ionicons name="close" size={12} color={Colors.white} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {editingName ? (
@@ -160,10 +211,35 @@ export default function ProfileScreen() {
           <Text style={s.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
 
-        <Text style={s.version}>Cave à Vin v2.0 · Flavien</Text>
+        <Text style={s.version}>CAVOU v2.0 · Flavien</Text>
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Modal caméra — photo de profil */}
+      <Modal visible={showCam} animationType="slide">
+        <View style={cam.container}>
+          <CameraView ref={cameraRef} style={cam.camera} facing="front">
+            <View style={cam.overlay}>
+              <View style={cam.topBar}>
+                <TouchableOpacity style={cam.close} onPress={() => setShowCam(false)}>
+                  <Ionicons name="close" size={24} color={Colors.white} />
+                </TouchableOpacity>
+                <Text style={cam.topTitle}>Photo de profil</Text>
+                <View style={{ width: 40 }} />
+              </View>
+              <View style={cam.shutterArea}>
+                <TouchableOpacity style={cam.shutter} onPress={takeProfilePhoto} disabled={capturing} activeOpacity={0.8}>
+                  {capturing
+                    ? <ActivityIndicator color={Colors.white} size="large" />
+                    : <View style={cam.shutterInner} />
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </CameraView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -223,9 +299,13 @@ const s = StyleSheet.create({
   backBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.brunMoka },
 
-  avatarSection: { alignItems: 'center', paddingVertical: Spacing.xl, gap: 6 },
-  avatar:        { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.lieDeVin, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm, ...Shadow.sm },
-  avatarText:    { fontSize: 32, fontWeight: '800', color: Colors.white },
+  avatarSection:   { alignItems: 'center', paddingVertical: Spacing.xl, gap: 6 },
+  avatarWrap:      { position: 'relative', marginBottom: Spacing.sm },
+  avatar:          { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.lieDeVin, alignItems: 'center', justifyContent: 'center', ...Shadow.sm },
+  avatarPhoto:     { width: 80, height: 80, borderRadius: 40, ...Shadow.sm },
+  avatarText:      { fontSize: 32, fontWeight: '800', color: Colors.white },
+  avatarEditBtn:   { position: 'absolute', bottom: 0, right: -4, width: 26, height: 26, borderRadius: 13, backgroundColor: Colors.lieDeVin, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.cremeIvoire },
+  avatarDeleteBtn: { position: 'absolute', top: -2, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.rougeAlerte, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.cremeIvoire },
 
   nameRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
   userName:   { fontSize: 22, fontWeight: '800', color: Colors.brunMoka },
@@ -249,4 +329,16 @@ const s = StyleSheet.create({
   },
   logoutText: { ...Typography.body, color: Colors.rougeAlerte, fontWeight: '700' },
   version:    { ...Typography.caption, color: Colors.brunClair, textAlign: 'center', marginTop: Spacing.xl },
+});
+
+const cam = StyleSheet.create({
+  container:    { flex: 1, backgroundColor: '#000' },
+  camera:       { flex: 1 },
+  overlay:      { flex: 1, justifyContent: 'space-between', backgroundColor: 'transparent' },
+  topBar:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingHorizontal: Spacing.lg },
+  close:        { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  topTitle:     { fontSize: 16, fontWeight: '700', color: Colors.white },
+  shutterArea:  { alignItems: 'center', paddingBottom: 64 },
+  shutter:      { width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: Colors.white },
+  shutterInner: { width: 54, height: 54, borderRadius: 27, backgroundColor: Colors.white },
 });

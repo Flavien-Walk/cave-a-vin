@@ -12,7 +12,7 @@ import { Input, Button, WineBadge, StarRating } from '../../src/components/ui';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { getRecommendations, analyzeFood } from '../../src/utils/recommendation';
 import { getWineColorHex } from '../../src/utils/bottle.utils';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type { WishlistItem, WishlistPriorite, Bottle, TasteProfile, SmartReco } from '../../src/types';
 import type { WineRecommendation, RecommendationResult } from '../../src/utils/recommendation';
 
@@ -42,6 +42,14 @@ export default function DiscoverScreen() {
     return bottles.filter(b => caveNames.includes(b.cave ?? ''));
   }, [bottles, caves, activeLieu]);
   const [activeTab, setActiveTab] = useState<Tab>('Accords & plats');
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+
+  // Deep-link vers un onglet spécifique (ex: wishlist depuis l'accueil)
+  useFocusEffect(useCallback(() => {
+    if (tabParam && TABS.includes(tabParam as Tab)) {
+      setActiveTab(tabParam as Tab);
+    }
+  }, [tabParam]));
 
   // Accords
   const [plat, setPlat] = useState('');

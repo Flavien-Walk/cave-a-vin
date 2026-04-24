@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants';
 
 export interface AuthUser {
@@ -9,17 +10,21 @@ export interface AuthUser {
   createdAt: string;
 }
 
-interface AuthState {
-  user:      AuthUser | null;
-  token:     string | null;
-  isLoading: boolean;
+const PROFILE_PHOTO_KEY = 'cave_profile_photo_v1';
 
-  preRegister: (email: string) => Promise<void>;
-  login:       (email: string, password: string) => Promise<void>;
-  register:    (name: string, email: string, password: string, code: string) => Promise<void>;
-  logout:      () => Promise<void>;
-  loadSession: () => Promise<boolean>;
-  updateMe:    (name?: string, password?: string) => Promise<void>;
+interface AuthState {
+  user:             AuthUser | null;
+  token:            string | null;
+  isLoading:        boolean;
+  profilePhotoUri:  string | null;
+
+  preRegister:      (email: string) => Promise<void>;
+  login:            (email: string, password: string) => Promise<void>;
+  register:         (name: string, email: string, password: string, code: string) => Promise<void>;
+  logout:           () => Promise<void>;
+  loadSession:      () => Promise<boolean>;
+  updateMe:         (name?: string, password?: string) => Promise<void>;
+  setProfilePhoto:  (uri: string | null) => Promise<void>;
 }
 
 const TOKEN_KEY = 'cave_token';
@@ -48,16 +53,19 @@ async function apiFetch(path: string, options: RequestInit & { token?: string } 
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user:      null,
-  token:     null,
-  isLoading: true,
+  user:            null,
+  token:           null,
+  isLoading:       true,
+  profilePhotoUri: null,
 
   loadSession: async () => {
     try {
-      const [token, userJson] = await Promise.all([
+      const [token, userJson, profilePhoto] = await Promise.all([
         store.get(TOKEN_KEY),
         store.get(USER_KEY),
+        AsyncStorage.getItem(PROFILE_PHOTO_KEY),
       ]);
+      if (profilePhoto) set({ profilePhotoUri: profilePhoto });
       if (token && userJson) {
         const user = JSON.parse(userJson) as AuthUser;
         set({ user, token, isLoading: false });
@@ -74,6 +82,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch { /* ignore */ }
     set({ isLoading: false });
     return false;
+  },
+
+  setProfilePhoto: async (uri) => {
+    if (uri) {
+      await AsyncStorage.setItem(PROFILE_PHOTO_KEY, uri);
+    } else {
+      await AsyncStorage.removeItem(PROFILE_PHOTO_KEY);
+    }
+    set({ profilePhotoUri: uri });
   },
 
   preRegister: async (email) => {

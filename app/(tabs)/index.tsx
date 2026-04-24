@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,13 +8,29 @@ import { useBottleStore, useAuthStore, useCavesStore, useUIStore, useWishlistSto
 import { BottleCard } from '../../src/components/bottle/BottleCard';
 import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
 
+const ANECDOTES = [
+  { emoji: '🍷', text: 'Un vin ouvert se conserve 3 à 5 jours au réfrigérateur, bouché hermétiquement.' },
+  { emoji: '🌡️', text: 'La température idéale de conservation est entre 10 et 15 °C, à l\'abri de la lumière.' },
+  { emoji: '🍇', text: 'Le Cabernet Sauvignon est le cépage le plus planté dans le monde.' },
+  { emoji: '🥂', text: 'Le Champagne doit être servi entre 6 et 9 °C pour révéler toutes ses bulles.' },
+  { emoji: '🌍', text: 'La France possède plus de 300 appellations d\'origine contrôlée.' },
+  { emoji: '⏳', text: 'Moins de 10 % des vins produits dans le monde gagnent vraiment à vieillir.' },
+  { emoji: '🏰', text: 'Un "château" en Bordelais peut désigner un simple domaine sans tour ni donjon.' },
+  { emoji: '🍽️', text: 'Le rosé se marie très bien avec la cuisine épicée grâce à sa fraîcheur et sa légèreté.' },
+  { emoji: '📏', text: 'Une bouteille standard contient 75 cl, soit environ 6 verres de dégustation.' },
+  { emoji: '🌿', text: 'Le terroir regroupe le sol, le sous-sol, l\'exposition et le microclimat d\'une parcelle.' },
+];
+
+const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+const todayAnecdote = ANECDOTES[dayOfYear % ANECDOTES.length];
+
 const TODAY = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
 type LieuEntry = { lieu: string; nbCaves: number; nbBottles: number };
 
 export default function DashboardScreen() {
   const { bottles, stats, isLoading, isStatsLoading, fetchBottles, fetchStats } = useBottleStore();
-  const { user } = useAuthStore();
+  const { user, profilePhotoUri } = useAuthStore();
   const { caves, activeLieu, fetchCaves, setActiveLieu } = useCavesStore();
   const { setFilter } = useUIStore();
   const { items: wishItems, fetchItems: fetchWishItems } = useWishlistStore();
@@ -78,10 +94,10 @@ export default function DashboardScreen() {
             <Text style={s.date}>{TODAY.charAt(0).toUpperCase() + TODAY.slice(1)}</Text>
           </View>
           <View style={s.headerRight}>
-            {/* Wishlist badge — accès premium discret */}
+            {/* Wishlist badge — ouvre directement l'onglet Wishlist dans Découvrir */}
             <TouchableOpacity
               style={s.wishBtn}
-              onPress={() => router.push('/(tabs)/discover')}
+              onPress={() => router.push({ pathname: '/(tabs)/discover', params: { tab: 'Wishlist' } } as any)}
               activeOpacity={0.75}
             >
               <Ionicons name="bookmark-outline" size={20} color={Colors.lieDeVin} />
@@ -92,7 +108,10 @@ export default function DashboardScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity style={s.avatarBtn} onPress={() => router.push('/profile' as any)}>
-              <Text style={s.avatarInitial}>{(user?.name?.[0] ?? '?').toUpperCase()}</Text>
+              {profilePhotoUri
+                ? <Image source={{ uri: profilePhotoUri }} style={s.avatarPhoto} />
+                : <Text style={s.avatarInitial}>{(user?.name?.[0] ?? '?').toUpperCase()}</Text>
+              }
             </TouchableOpacity>
           </View>
         </View>
@@ -185,6 +204,15 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        {/* ── Anecdote du jour ── */}
+        <TouchableOpacity style={s.anecdote} activeOpacity={0.75} onPress={() => {}}>
+          <Text style={s.anecdoteEmoji}>{todayAnecdote.emoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.anecdoteLabel}>Le saviez-vous ?</Text>
+            <Text style={s.anecdoteText}>{todayAnecdote.text}</Text>
+          </View>
+        </TouchableOpacity>
+
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -239,8 +267,9 @@ const s = StyleSheet.create({
   wishBadge:     { position: 'absolute', top: -3, right: -3, backgroundColor: Colors.lieDeVin, borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   wishBadgeText: { fontSize: 10, fontWeight: '800', color: Colors.white },
 
-  avatarBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.lieDeVin, alignItems: 'center', justifyContent: 'center' },
+  avatarBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.lieDeVin, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarInitial: { fontSize: 16, fontWeight: '700', color: Colors.white },
+  avatarPhoto:   { width: 40, height: 40, borderRadius: 20 },
 
   // Onboarding
   onboardingCard:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', ...Shadow.sm },
@@ -277,6 +306,12 @@ const s = StyleSheet.create({
   emptyText:  { fontSize: 13, color: Colors.brunClair, textAlign: 'center', lineHeight: 20 },
   emptyBtn:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.lieDeVin, borderRadius: Radius.full, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, marginTop: 4 },
   emptyBtnText:{ fontSize: 14, fontWeight: '700', color: Colors.white },
+
+  // Anecdote du jour
+  anecdote:      { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.lg, borderWidth: 1, borderColor: Colors.parchemin },
+  anecdoteEmoji: { fontSize: 22, lineHeight: 28 },
+  anecdoteLabel: { fontSize: 10, fontWeight: '800', color: Colors.lieDeVin, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  anecdoteText:  { fontSize: 13, color: Colors.brunMoyen, lineHeight: 19 },
 
   // Modal lieu
   overlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
