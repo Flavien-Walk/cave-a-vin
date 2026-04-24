@@ -92,6 +92,14 @@ export default function DashboardScreen() {
             <Text style={s.brand}>CAVOU</Text>
             <Text style={s.greeting}>Bonjour, {firstName}</Text>
             <Text style={s.date}>{TODAY.charAt(0).toUpperCase() + TODAY.slice(1)}</Text>
+            {/* Pill de lieu — contexte global du dashboard, visible dès le header */}
+            {lieuEntries.length > 1 && (
+              <TouchableOpacity style={s.lieuPill} onPress={() => setShowLieuModal(true)} activeOpacity={0.75}>
+                <Ionicons name="location" size={10} color={Colors.lieDeVin} />
+                <Text style={s.lieuPillText} numberOfLines={1}>{activeLieu ?? 'Tous les lieux'}</Text>
+                <Ionicons name="chevron-down" size={10} color={Colors.lieDeVin} />
+              </TouchableOpacity>
+            )}
           </View>
           <View style={s.headerRight}>
             {/* Wishlist badge — ouvre directement l'onglet Wishlist dans Découvrir */}
@@ -159,19 +167,6 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* ── Lieu actif + switch ── */}
-        {caves.length > 0 && lieuEntries.length > 1 && (
-          <TouchableOpacity
-            style={s.lieuSwitch}
-            onPress={() => setShowLieuModal(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="location" size={13} color={Colors.lieDeVin} />
-            <Text style={s.lieuSwitchText} numberOfLines={1}>{activeLieu ?? 'Tous les lieux'}</Text>
-            <Ionicons name="chevron-down" size={13} color={Colors.lieDeVin} />
-          </TouchableOpacity>
-        )}
-
         {/* ── Alerte urgence ── */}
         {urgentList.length > 0 && (
           <TouchableOpacity style={s.alert} onPress={() => router.push('/(tabs)/discover')} activeOpacity={0.8}>
@@ -222,6 +217,19 @@ export default function DashboardScreen() {
           <View style={s.sheet}>
             <View style={s.sheetHandle} />
             <Text style={s.sheetTitle}>Choisir un lieu</Text>
+            {/* Option "Tous les lieux" pour réinitialiser le filtre */}
+            <TouchableOpacity
+              style={[s.sheetItem, activeLieu === null && s.sheetItemActive]}
+              onPress={() => { setActiveLieu(null); setFilter('cave', undefined); setShowLieuModal(false); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="apps-outline" size={15} color={activeLieu === null ? Colors.lieDeVin : Colors.brunClair} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.sheetItemName, activeLieu === null && s.sheetItemNameActive]}>Tous les lieux</Text>
+                <Text style={s.sheetItemCount}>{bottles.length} bouteille{bottles.length !== 1 ? 's' : ''}</Text>
+              </View>
+              {activeLieu === null && <Ionicons name="checkmark-circle" size={20} color={Colors.lieDeVin} />}
+            </TouchableOpacity>
             {lieuEntries.map(({ lieu, nbBottles }) => {
               const active = activeLieu === lieu;
               return (
@@ -284,9 +292,9 @@ const s = StyleSheet.create({
   statValue:   { fontSize: 18, fontWeight: '800', color: Colors.white, letterSpacing: -0.3 },
   statLabel:   { fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
 
-  // Lieu switch compact
-  lieuSwitch:    { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.champagne, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 8, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.parchemin, alignSelf: 'flex-start' },
-  lieuSwitchText:{ fontSize: 13, fontWeight: '600', color: Colors.lieDeVin },
+  // Lieu pill — dans le header sous la date
+  lieuPill:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.rougeVinLight, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: Colors.lieDeVin + '25' },
+  lieuPillText: { fontSize: 11, fontWeight: '600', color: Colors.lieDeVin, maxWidth: 140 },
 
   // Alerte urgence
   alert:     { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.rougeAlerteLight, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.lg, borderLeftWidth: 3, borderLeftColor: Colors.rougeAlerte },
