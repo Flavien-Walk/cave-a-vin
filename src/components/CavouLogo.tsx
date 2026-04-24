@@ -3,96 +3,77 @@ import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants';
 
-/**
- * Logo CAVOU — bouteille minimaliste dessinée avec des Views RN.
- * Pas d'icône de librairie. Pas d'emoji.
- *
- * Anatomie (de haut en bas) :
- *   [capsule / foil — ambreChaud]
- *   [col / neck — ivoire]
- *   [épaule + corps — ivoire, arrondi haut]
- *     ↳ [remplissage vin — gradient lieDeVin, animé si fillProgress fourni]
- *     ↳ [reflet latéral — shine subtil]
- */
-
 interface CavouLogoProps {
-  /** Hauteur cible de la bouteille (hors wordmark). Base interne : 72px. */
   size?: number;
-  /** Affiche "CAVOU / C'EST VOTRE CAVE" sous la bouteille. */
   showWordmark?: boolean;
-  /** Mode fond sombre (splash gradient) — bouteille ivoire + texte or. */
   dark?: boolean;
-  /**
-   * Animated.Value 0→1 qui pilote la montée du vin dans la bouteille.
-   * Si absent, le vin est affiché à un niveau statique (50 %).
-   */
   fillProgress?: Animated.Value;
 }
 
-// Proportions définies pour une hauteur de base de 72 px.
-// Toutes les dimensions sont multipliées par (size / BASE).
-const BASE       = 72;
-const CAP_W_R    = 13 / BASE;   // largeur capsule
-const CAP_H_R    =  5 / BASE;   // hauteur capsule
-const NK_W_R     =  9 / BASE;   // largeur col
-const NK_H_R     = 15 / BASE;   // hauteur col
-const BD_W_R     = 24 / BASE;   // largeur corps
-const BD_H_R     = 52 / BASE;   // hauteur corps
-const BD_TOP_R   = 10 / BASE;   // radius haut corps (épaule)
-const BD_BOT_R   =  8 / BASE;   // radius bas corps
-const WINE_MAX_R = 30 / BASE;   // hauteur max du remplissage vin
+// Proportions pour une hauteur de base de 80 px (tous les éléments en ratios).
+const BASE       = 80;
+const CAP_W_R    = 15 / BASE;   // capsule — légèrement plus large que le col
+const CAP_H_R    =  6 / BASE;
+const NK_W_R     =  9 / BASE;
+const NK_H_R     = 17 / BASE;
+const BD_W_R     = 26 / BASE;
+const BD_H_R     = 54 / BASE;
+const BD_TOP_R   = 12 / BASE;   // épaule prononcée
+const BD_BOT_R   =  8 / BASE;
+const WINE_MAX_R = 34 / BASE;   // hauteur max du vin (42 % du corps)
+const LBL_MX_R   =  3 / BASE;  // marge horizontale de l'étiquette
+const LBL_H_R    = 14 / BASE;  // hauteur de l'étiquette
+const LBL_Y_R    =  8 / BASE;  // distance bas étiquette / bas du corps
 
 export function CavouLogo({
-  size = 72,
+  size = 80,
   showWordmark = false,
   dark = false,
   fillProgress,
 }: CavouLogoProps) {
   const sc = size / BASE;
 
-  const CAP_W  = CAP_W_R  * BASE * sc;
-  const CAP_H  = CAP_H_R  * BASE * sc;
-  const NK_W   = NK_W_R   * BASE * sc;
-  const NK_H   = NK_H_R   * BASE * sc;
-  const BD_W   = BD_W_R   * BASE * sc;
-  const BD_H   = BD_H_R   * BASE * sc;
-  const BD_TOP = BD_TOP_R * BASE * sc;
-  const BD_BOT = BD_BOT_R * BASE * sc;
+  const CAP_W    = CAP_W_R  * BASE * sc;
+  const CAP_H    = CAP_H_R  * BASE * sc;
+  const NK_W     = NK_W_R   * BASE * sc;
+  const NK_H     = NK_H_R   * BASE * sc;
+  const BD_W     = BD_W_R   * BASE * sc;
+  const BD_H     = BD_H_R   * BASE * sc;
+  const BD_TOP   = BD_TOP_R * BASE * sc;
+  const BD_BOT   = BD_BOT_R * BASE * sc;
   const WINE_MAX = WINE_MAX_R * BASE * sc;
+  const LBL_MX   = LBL_MX_R * BASE * sc;
+  const LBL_H    = LBL_H_R  * BASE * sc;
+  const LBL_Y    = LBL_Y_R  * BASE * sc;
 
-  // Couleurs selon le mode
-  const bottleColor = Colors.cremeIvoire;  // corps de la bouteille toujours ivoire
-  const capColor    = Colors.ambreChaud;
-  const wineLight   = dark ? Colors.lieDeVin + 'CC' : Colors.lieDeVin;
-  const wineDark    = '#2A0A15';
-  const shineAlpha  = 'rgba(255,255,255,0.30)';
+  // Le wordmark grossit avec la bouteille (plafonné à 1.4× pour rester lisible)
+  const wmSc = Math.min(sc, 1.4);
 
-  // Hauteur animée du remplissage (0 → WINE_MAX) ou statique à 52 %
+  const bottleColor = Colors.cremeIvoire;
+  const wineLight   = dark ? Colors.lieDeVin + 'DD' : Colors.lieDeVin;
+  const wineDark    = '#18040E';
+
+  // Hauteur animée du remplissage ou statique à 52 %
   const wineH: number | Animated.AnimatedInterpolation<number> = fillProgress
     ? fillProgress.interpolate({ inputRange: [0, 1], outputRange: [0, WINE_MAX] })
     : WINE_MAX * 0.52;
 
   return (
     <View style={ss.root}>
-      {/* ── Bouteille ── */}
       <View style={{ alignItems: 'center' }}>
 
-        {/* Capsule / foil — or chaud */}
-        <View style={{
-          width: CAP_W,
-          height: CAP_H,
-          borderRadius: CAP_H / 2,
-          backgroundColor: capColor,
-        }} />
+        {/* Capsule foil — gradient doré chaud */}
+        <LinearGradient
+          colors={[Colors.ambreChaud, '#D4A840', Colors.ambreChaud + 'BB']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ width: CAP_W, height: CAP_H, borderRadius: CAP_H / 2 }}
+        />
 
-        {/* Col / neck — ivoire */}
-        <View style={{
-          width: NK_W,
-          height: NK_H,
-          backgroundColor: bottleColor,
-        }} />
+        {/* Col */}
+        <View style={{ width: NK_W, height: NK_H, backgroundColor: bottleColor }} />
 
-        {/* Corps — borderTop crée la transition d'épaule */}
+        {/* Corps avec épaule arrondie */}
         <View style={{
           width: BD_W,
           height: BD_H,
@@ -106,49 +87,76 @@ export function CavouLogo({
 
           {/* Remplissage vin — monte depuis le bas */}
           <Animated.View style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: wineH as any,   // number ou AnimatedInterpolation
-            overflow: 'hidden',
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            height: wineH as any, overflow: 'hidden',
           }}>
-            {/* Gradient ancré en bas du conteneur animé */}
             <LinearGradient
               colors={[wineLight, wineDark]}
               start={{ x: 0.5, y: 0 }}
               end={{ x: 0.5, y: 1 }}
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: WINE_MAX,   // hauteur max du gradient
-              }}
+              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: WINE_MAX }}
             />
           </Animated.View>
 
-          {/* Reflet latéral — illusion de verre */}
+          {/* Zone étiquette — identité bouteille, visible au-dessus du vin */}
           <View style={{
             position: 'absolute',
-            top: 5 * sc,
-            left: 5 * sc,
-            width: 3 * sc,
-            height: BD_H * 0.42,
-            borderRadius: 1.5 * sc,
-            backgroundColor: shineAlpha,
+            bottom: LBL_Y, left: LBL_MX, right: LBL_MX,
+            height: LBL_H,
+            borderRadius: 2 * sc,
+            borderWidth: 0.5,
+            borderColor: Colors.ambreChaud + '75',
+            backgroundColor: 'rgba(0,0,0,0.05)',
+          }}>
+            <View style={{
+              position: 'absolute', top: 3 * sc, left: 3 * sc, right: 3 * sc,
+              height: 0.5, backgroundColor: Colors.ambreChaud + '85',
+            }} />
+            <View style={{
+              position: 'absolute', bottom: 3 * sc, left: 3 * sc, right: 3 * sc,
+              height: 0.5, backgroundColor: Colors.ambreChaud + '85',
+            }} />
+          </View>
+
+          {/* Glacis verre — shimmer horizontal gauche→droite */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.15)', 'transparent', 'rgba(0,0,0,0.04)']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+
+          {/* Reflet vertical principal */}
+          <View style={{
+            position: 'absolute', top: 6 * sc, left: 5 * sc,
+            width: 2.5 * sc, height: BD_H * 0.44,
+            borderRadius: 1.5 * sc, backgroundColor: 'rgba(255,255,255,0.33)',
+          }} />
+
+          {/* Micro-reflet secondaire */}
+          <View style={{
+            position: 'absolute', top: 10 * sc, left: 9 * sc,
+            width: 1 * sc, height: BD_H * 0.20,
+            borderRadius: 1 * sc, backgroundColor: 'rgba(255,255,255,0.16)',
           }} />
 
         </View>
       </View>
 
-      {/* ── Wordmark ── */}
       {showWordmark && (
         <View style={ss.wordmark}>
-          <Text style={[ss.brand, { color: dark ? Colors.ambreChaud : Colors.lieDeVin }]}>
+          <Text style={[ss.brand, {
+            color: dark ? Colors.ambreChaud : Colors.lieDeVin,
+            fontSize: 22 * wmSc,
+            letterSpacing: 6 * wmSc,
+          }]}>
             CAVOU
           </Text>
-          <Text style={[ss.tagline, { color: dark ? 'rgba(255,255,255,0.40)' : Colors.brunClair }]}>
+          <Text style={[ss.tagline, {
+            color: dark ? 'rgba(255,255,255,0.38)' : Colors.brunClair,
+            fontSize: 8 * wmSc,
+            letterSpacing: 2.5 * wmSc,
+          }]}>
             C'EST VOTRE CAVE
           </Text>
         </View>
@@ -159,7 +167,7 @@ export function CavouLogo({
 
 const ss = StyleSheet.create({
   root:     { alignItems: 'center', gap: 16 },
-  wordmark: { alignItems: 'center', gap: 5 },
-  brand:    { fontSize: 22, fontWeight: '900', letterSpacing: 6, textTransform: 'uppercase' },
-  tagline:  { fontSize: 8, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+  wordmark: { alignItems: 'center', gap: 6 },
+  brand:    { fontWeight: '900', textTransform: 'uppercase' },
+  tagline:  { fontWeight: '600', textTransform: 'uppercase' },
 });

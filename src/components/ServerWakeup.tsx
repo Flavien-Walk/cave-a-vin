@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, Radius } from '../constants';
 import { API_URL } from '../constants';
@@ -12,14 +12,18 @@ export function ServerWakeup({ onReady }: Props) {
   const [phase, setPhase]     = useState<Phase>('checking');
   const [elapsed, setElapsed] = useState(0);
 
-  // Opacity générale (fade-out à la fin)
+  // Opacité générale (fade-out à la fin)
   const fadeAnim  = useRef(new Animated.Value(1)).current;
-  // Remplissage vin 0→1 sur 28s (durée max wake-up serveur)
+  // Remplissage vin 0→1 sur 28s — pilote la bouteille comme progressbar
   const fillAnim  = useRef(new Animated.Value(0)).current;
   // Spring d'entrée sur le contenu
-  const scaleAnim = useRef(new Animated.Value(0.88)).current;
+  const scaleAnim = useRef(new Animated.Value(0.86)).current;
   // Révélation progressive du logo
   const logoFade  = useRef(new Animated.Value(0)).current;
+  // Flottement vertical doux du logo
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  // Respiration du halo radial
+  const haloAnim  = useRef(new Animated.Value(1)).current;
   // Dots
   const dot1 = useRef(new Animated.Value(0.25)).current;
   const dot2 = useRef(new Animated.Value(0.25)).current;
@@ -27,21 +31,55 @@ export function ServerWakeup({ onReady }: Props) {
 
   // ── Animations d'entrée ──
   useEffect(() => {
-    // Spring sur le contenu
     Animated.spring(scaleAnim, {
-      toValue: 1, tension: 65, friction: 9, useNativeDriver: true,
+      toValue: 1, tension: 60, friction: 8, useNativeDriver: true,
     }).start();
-    // Logo : fade in légèrement décalé → effet de révélation
     Animated.timing(logoFade, {
-      toValue: 1, duration: 1000, delay: 200, useNativeDriver: true,
+      toValue: 1, duration: 900, delay: 300, useNativeDriver: true,
     }).start();
   }, []);
 
-  // ── Remplissage vin (JS driver — anime la hauteur) ──
+  // ── Remplissage vin (JS driver — anime height) ──
   useEffect(() => {
     Animated.timing(fillAnim, {
       toValue: 1, duration: 28000, useNativeDriver: false,
     }).start();
+  }, []);
+
+  // ── Flottement Y du logo ──
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -7, duration: 2400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0, duration: 2400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  // ── Respiration du halo ──
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(haloAnim, {
+          toValue: 1.07, duration: 3200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(haloAnim, {
+          toValue: 1, duration: 3200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, []);
 
   // ── Dots pulsants ──
@@ -94,14 +132,14 @@ export function ServerWakeup({ onReady }: Props) {
   }, []);
 
   const msg = {
-    checking: 'Connexion à votre cave…',
-    waking:   'Réveil du serveur…',
+    checking: 'Ouverture de votre cave…',
+    waking:   'Votre cave se prépare…',
     ready:    'Cave prête !',
-    timeout:  'Le serveur met du temps à répondre.',
+    timeout:  'Impossible de joindre le serveur.',
   }[phase];
 
   const sub = phase === 'waking'
-    ? `Votre cave démarre. Jusqu'à 30 secondes.`
+    ? `Cela peut prendre jusqu'à 30 secondes.`
     : phase === 'timeout'
       ? 'Vérifiez votre connexion ou entrez quand même.'
       : '';
@@ -109,34 +147,44 @@ export function ServerWakeup({ onReady }: Props) {
   return (
     <Animated.View style={[s.overlay, { opacity: fadeAnim }]}>
 
-      {/* Fond gradient bordeaux profond → noir vineux */}
+      {/* Fond — gradient 3 stops pour plus de profondeur */}
       <LinearGradient
-        colors={['#5E1226', '#1A0510']}
+        colors={['#4A0F1E', '#200A12', '#080207']}
         style={StyleSheet.absoluteFillObject}
-        start={{ x: 0.35, y: 0 }}
-        end={{ x: 0.65, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
       />
 
-      {/* Lueur centrale très subtile pour profondeur */}
+      {/* Lueur centrale bordeaux */}
       <LinearGradient
         colors={['transparent', Colors.lieDeVin + '18', 'transparent']}
-        style={[StyleSheet.absoluteFillObject, { transform: [{ scaleX: 1.4 }] }]}
-        start={{ x: 0.5, y: 0.2 }}
-        end={{ x: 0.5, y: 0.8 }}
+        style={[StyleSheet.absoluteFillObject, { transform: [{ scaleX: 1.5 }] }]}
+        start={{ x: 0.5, y: 0.10 }}
+        end={{ x: 0.5, y: 0.72 }}
       />
+
+      {/* Halo radial concentrique — respire indépendamment */}
+      <View style={[StyleSheet.absoluteFillObject, s.haloWrap]} pointerEvents="none">
+        <Animated.View style={[s.haloOuter, { transform: [{ scale: haloAnim }] }]}>
+          <View style={s.haloMid}>
+            <View style={s.haloCore} />
+          </View>
+        </Animated.View>
+      </View>
 
       {/* Contenu centré */}
       <Animated.View style={[s.content, { transform: [{ scale: scaleAnim }] }]}>
 
-        {/* Logo — révélé progressivement */}
-        <Animated.View style={{ opacity: logoFade }}>
-          <CavouLogo
-            size={88}
-            dark
-            showWordmark
-            fillProgress={fillAnim}
-          />
+        {/* Logo — révélé + flottement Y */}
+        <Animated.View style={{
+          opacity: logoFade,
+          transform: [{ translateY: floatAnim }],
+        }}>
+          <CavouLogo size={120} dark showWordmark fillProgress={fillAnim} />
         </Animated.View>
+
+        {/* Séparateur doré discret */}
+        <View style={s.separator} />
 
         {/* Message d'état */}
         <View style={s.statusBlock}>
@@ -185,19 +233,42 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 999,
   },
+
+  // Halo — centré via flex sur le parent absoluteFill
+  haloWrap: { alignItems: 'center', justifyContent: 'center' },
+  haloOuter: {
+    width: 320, height: 320, borderRadius: 160,
+    backgroundColor: Colors.lieDeVin + '0C',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  haloMid: {
+    width: 210, height: 210, borderRadius: 105,
+    backgroundColor: Colors.lieDeVin + '12',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  haloCore: {
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.ambreChaud + '0D',
+  },
+
   content: {
     alignItems: 'center',
     gap: Spacing.xl,
     paddingHorizontal: Spacing.xl,
     width: '100%',
   },
-  statusBlock: {
-    alignItems: 'center',
-    gap: Spacing.xs,
+
+  separator: {
+    width: 44, height: 1,
+    backgroundColor: Colors.ambreChaud + '45',
+    marginVertical: -Spacing.sm,
   },
-  msg:  { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.80)', textAlign: 'center' },
-  sub:  { fontSize: 12, color: 'rgba(255,255,255,0.42)', textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.sm },
-  dots: { flexDirection: 'row', gap: 8 },
+
+  statusBlock: { alignItems: 'center', gap: Spacing.xs },
+  msg: { fontSize: 15, fontWeight: '600', color: 'rgba(255,255,255,0.82)', textAlign: 'center' },
+  sub: { fontSize: 12, color: 'rgba(255,255,255,0.40)', textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.md },
+
+  dots: { flexDirection: 'row', gap: 9 },
   dot:  { width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.ambreChaud },
 
   readyRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -205,14 +276,14 @@ const s = StyleSheet.create({
   readyText: { fontSize: 13, color: '#5CB85C', fontWeight: '700' },
 
   retryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.09)',
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.20)',
   },
   retryText: { fontSize: 13, color: Colors.white, fontWeight: '600' },
 
-  elapsed: { fontSize: 11, color: 'rgba(255,255,255,0.28)' },
+  elapsed: { fontSize: 11, color: 'rgba(255,255,255,0.25)' },
 });
