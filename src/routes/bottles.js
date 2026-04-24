@@ -41,6 +41,7 @@ router.get('/:id', c.getOne);
 router.put('/:id', c.update);
 router.delete('/:id', c.remove);
 
+router.put('/:id/photo',            upload.single('photo'), c.uploadPhoto);
 router.put('/:id/favorite',         c.toggleFavorite);
 router.post('/:id/drink',           c.drink);
 router.get('/:id/history',          c.getHistory);

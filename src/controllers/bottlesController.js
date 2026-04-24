@@ -6,6 +6,22 @@ const owns = async (id, userId) => {
   return b;
 };
 
+// ── PUT /api/bottles/:id/photo ───────────────────────────────────────────────
+// Reçoit une image multipart, la stocke en base64 dans photoUrl
+exports.uploadPhoto = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'Aucune image reçue.' });
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    const bottle = await Bottle.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      { photoUrl: base64 },
+      { new: true }
+    );
+    if (!bottle) return res.status(404).json({ message: 'Bouteille introuvable.' });
+    res.json({ photoUrl: base64 });
+  } catch (err) { next(err); }
+};
+
 // ── GET /api/bottles ─────────────────────────────────────────────────────────
 exports.getAll = async (req, res, next) => {
   try {

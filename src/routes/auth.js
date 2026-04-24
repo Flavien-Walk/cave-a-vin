@@ -1,7 +1,13 @@
 const router    = require('express').Router();
 const rateLimit = require('express-rate-limit');
+const multer    = require('multer');
 const ctrl      = require('../controllers/authController');
 const { authMiddleware } = require('../middleware/auth');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 5 * 1024 * 1024 }, // 5 MB max pour les avatars
+});
 
 // 10 tentatives par IP par 15 minutes sur les routes sensibles
 const authLimiter = rateLimit({
@@ -26,6 +32,7 @@ router.post('/register',        authLimiter,  ctrl.register);
 router.post('/login',           authLimiter,  ctrl.login);
 router.get( '/me',              authMiddleware, ctrl.me);
 router.put( '/me',              authMiddleware, ctrl.updateMe);
+router.put( '/avatar',          authMiddleware, upload.single('avatar'), ctrl.uploadAvatar);
 router.post('/forgot-password', emailLimiter, ctrl.forgotPassword);
 router.post('/reset-password',  authLimiter,  ctrl.resetPassword);
 

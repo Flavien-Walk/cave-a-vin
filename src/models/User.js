@@ -5,6 +5,7 @@ const UserSchema = new mongoose.Schema({
   name:         { type: String, required: true, trim: true, maxlength: 100 },
   email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
   passwordHash: { type: String, required: true },
+  avatarUrl:    { type: String, default: null },
   resetCode:       { type: String,  select: false },
   resetCodeExpiry: { type: Date,    select: false },
 }, { timestamps: true });
@@ -21,7 +22,7 @@ UserSchema.methods.checkPassword = function (plain) {
 };
 
 UserSchema.methods.toPublic = function () {
-  return { _id: this._id, name: this.name, email: this.email, createdAt: this.createdAt };
+  return { _id: this._id, name: this.name, email: this.email, avatarUrl: this.avatarUrl ?? null, createdAt: this.createdAt };
 };
 
 module.exports = mongoose.model('User', UserSchema);

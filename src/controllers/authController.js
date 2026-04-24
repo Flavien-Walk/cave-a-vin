@@ -110,6 +110,21 @@ exports.updateMe = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// PUT /api/auth/avatar  (upload avatar via multipart — stocké en base64 dans avatarUrl)
+exports.uploadAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'Aucune image reçue.' });
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      { avatarUrl: base64 },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    res.json({ user: user.toPublic() });
+  } catch (err) { next(err); }
+};
+
 // POST /api/auth/forgot-password
 exports.forgotPassword = async (req, res, next) => {
   try {
