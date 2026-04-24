@@ -1,59 +1,63 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, Radius } from '../constants';
 import { API_URL } from '../constants';
 import { CavouLogo } from './CavouLogo';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
-const PROGRESS_W = SCREEN_W * 0.52;
-
 type Phase = 'checking' | 'waking' | 'ready' | 'timeout';
-
 interface Props { onReady: () => void; }
 
 export function ServerWakeup({ onReady }: Props) {
   const [phase, setPhase]     = useState<Phase>('checking');
   const [elapsed, setElapsed] = useState(0);
 
-  const fadeAnim    = useRef(new Animated.Value(1)).current;
-  const fillAnim    = useRef(new Animated.Value(0)).current;  // progress 0→1
-  const scaleAnim   = useRef(new Animated.Value(0.88)).current;
-  const dot1        = useRef(new Animated.Value(0.3)).current;
-  const dot2        = useRef(new Animated.Value(0.3)).current;
-  const dot3        = useRef(new Animated.Value(0.3)).current;
+  // Opacity générale (fade-out à la fin)
+  const fadeAnim  = useRef(new Animated.Value(1)).current;
+  // Remplissage vin 0→1 sur 28s (durée max wake-up serveur)
+  const fillAnim  = useRef(new Animated.Value(0)).current;
+  // Spring d'entrée sur le contenu
+  const scaleAnim = useRef(new Animated.Value(0.88)).current;
+  // Révélation progressive du logo
+  const logoFade  = useRef(new Animated.Value(0)).current;
+  // Dots
+  const dot1 = useRef(new Animated.Value(0.25)).current;
+  const dot2 = useRef(new Animated.Value(0.25)).current;
+  const dot3 = useRef(new Animated.Value(0.25)).current;
 
-  // Entry spring
+  // ── Animations d'entrée ──
   useEffect(() => {
-    Animated.spring(scaleAnim, { toValue: 1, tension: 70, friction: 9, useNativeDriver: true }).start();
-  }, []);
-
-  // Progress bar — parcourt la durée max serveur (28s)
-  useEffect(() => {
-    Animated.timing(fillAnim, {
-      toValue: 1,
-      duration: 28000,
-      useNativeDriver: false,
+    // Spring sur le contenu
+    Animated.spring(scaleAnim, {
+      toValue: 1, tension: 65, friction: 9, useNativeDriver: true,
+    }).start();
+    // Logo : fade in légèrement décalé → effet de révélation
+    Animated.timing(logoFade, {
+      toValue: 1, duration: 1000, delay: 200, useNativeDriver: true,
     }).start();
   }, []);
 
-  // Dots pulsing
+  // ── Remplissage vin (JS driver — anime la hauteur) ──
+  useEffect(() => {
+    Animated.timing(fillAnim, {
+      toValue: 1, duration: 28000, useNativeDriver: false,
+    }).start();
+  }, []);
+
+  // ── Dots pulsants ──
   useEffect(() => {
     const pulse = (dot: Animated.Value, delay: number) =>
       Animated.loop(Animated.sequence([
         Animated.delay(delay),
-        Animated.timing(dot, { toValue: 1, duration: 480, useNativeDriver: true }),
-        Animated.timing(dot, { toValue: 0.3, duration: 480, useNativeDriver: true }),
+        Animated.timing(dot, { toValue: 1,    duration: 480, useNativeDriver: true }),
+        Animated.timing(dot, { toValue: 0.25, duration: 480, useNativeDriver: true }),
       ]));
-    const a1 = pulse(dot1, 0);
-    const a2 = pulse(dot2, 200);
-    const a3 = pulse(dot3, 400);
+    const [a1, a2, a3] = [pulse(dot1, 0), pulse(dot2, 200), pulse(dot3, 400)];
     a1.start(); a2.start(); a3.start();
     return () => { a1.stop(); a2.stop(); a3.stop(); };
   }, []);
 
-  // Server polling
+  // ── Polling serveur ──
   useEffect(() => {
     let cancelled = false;
     let attempt   = 0;
@@ -74,15 +78,13 @@ export function ServerWakeup({ onReady }: Props) {
       attempt++;
       setElapsed(Math.round((Date.now() - start) / 1000));
       if (attempt > 1) setPhase('waking');
-
       try {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch(`${API_URL}/health`, { signal: controller.signal });
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 3500);
+        const res = await fetch(`${API_URL}/health`, { signal: ctrl.signal });
         clearTimeout(t);
         if (res.ok && !cancelled) { dismiss(); return; }
       } catch { /* retry */ }
-
       if (attempt >= MAX) { if (!cancelled) setPhase('timeout'); return; }
       if (!cancelled) setTimeout(check, 2000);
     };
@@ -104,15 +106,10 @@ export function ServerWakeup({ onReady }: Props) {
       ? 'Vérifiez votre connexion ou entrez quand même.'
       : '';
 
-  const fillWidth = fillAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, PROGRESS_W],
-  });
-
   return (
     <Animated.View style={[s.overlay, { opacity: fadeAnim }]}>
 
-      {/* Fond gradient sombre — identité CAVOU */}
+      {/* Fond gradient bordeaux profond → noir vineux */}
       <LinearGradient
         colors={['#5E1226', '#1A0510']}
         style={StyleSheet.absoluteFillObject}
@@ -120,25 +117,34 @@ export function ServerWakeup({ onReady }: Props) {
         end={{ x: 0.65, y: 1 }}
       />
 
-      {/* Grain de texture subtil */}
-      <View style={s.grainOverlay} pointerEvents="none" />
+      {/* Lueur centrale très subtile pour profondeur */}
+      <LinearGradient
+        colors={['transparent', Colors.lieDeVin + '18', 'transparent']}
+        style={[StyleSheet.absoluteFillObject, { transform: [{ scaleX: 1.4 }] }]}
+        start={{ x: 0.5, y: 0.2 }}
+        end={{ x: 0.5, y: 0.8 }}
+      />
 
       {/* Contenu centré */}
       <Animated.View style={[s.content, { transform: [{ scale: scaleAnim }] }]}>
 
-        {/* Logo CAVOU */}
-        <CavouLogo size={84} dark showWordmark />
-
-        {/* Barre de progression fine — or */}
-        <View style={s.progressTrack}>
-          <Animated.View style={[s.progressFill, { width: fillWidth }]} />
-        </View>
+        {/* Logo — révélé progressivement */}
+        <Animated.View style={{ opacity: logoFade }}>
+          <CavouLogo
+            size={88}
+            dark
+            showWordmark
+            fillProgress={fillAnim}
+          />
+        </Animated.View>
 
         {/* Message d'état */}
-        <Text style={s.title}>{msg}</Text>
-        {sub ? <Text style={s.sub}>{sub}</Text> : null}
+        <View style={s.statusBlock}>
+          <Text style={s.msg}>{msg}</Text>
+          {!!sub && <Text style={s.sub}>{sub}</Text>}
+        </View>
 
-        {/* Dots — phase loading */}
+        {/* Dots de chargement */}
         {phase !== 'ready' && phase !== 'timeout' && (
           <View style={s.dots}>
             {[dot1, dot2, dot3].map((d, i) => (
@@ -147,7 +153,7 @@ export function ServerWakeup({ onReady }: Props) {
           </View>
         )}
 
-        {/* Prêt */}
+        {/* Connecté */}
         {phase === 'ready' && (
           <View style={s.readyRow}>
             <View style={s.readyDot} />
@@ -162,6 +168,7 @@ export function ServerWakeup({ onReady }: Props) {
           </TouchableOpacity>
         )}
 
+        {/* Compteur secondes en phase waking */}
         {phase === 'waking' && elapsed > 5 && (
           <Text style={s.elapsed}>{elapsed}s</Text>
         )}
@@ -178,55 +185,34 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 999,
   },
-
-  // Grain très léger pour texture premium
-  grainOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-  },
-
   content: {
     alignItems: 'center',
-    gap: Spacing.lg,
+    gap: Spacing.xl,
     paddingHorizontal: Spacing.xl,
     width: '100%',
   },
-
-  // Barre de progression horizontale en or
-  progressTrack: {
-    width: PROGRESS_W,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 1,
-    overflow: 'hidden',
-    marginTop: Spacing.sm,
+  statusBlock: {
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
-  progressFill: {
-    height: 2,
-    backgroundColor: Colors.ambreChaud,
-    borderRadius: 1,
-  },
+  msg:  { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.80)', textAlign: 'center' },
+  sub:  { fontSize: 12, color: 'rgba(255,255,255,0.42)', textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.sm },
+  dots: { flexDirection: 'row', gap: 8 },
+  dot:  { width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.ambreChaud },
 
-  title: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.82)', textAlign: 'center' },
-  sub:   { fontSize: 12, color: 'rgba(255,255,255,0.45)', textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.sm },
-
-  dots:  { flexDirection: 'row', gap: 8, marginTop: 2 },
-  dot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.ambreChaud },
-
-  readyRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  readyRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
   readyDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: '#5CB85C' },
   readyText: { fontSize: 13, color: '#5CB85C', fontWeight: '700' },
 
-  retryBtn:  {
-    marginTop: Spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  retryBtn: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   retryText: { fontSize: 13, color: Colors.white, fontWeight: '600' },
 
-  elapsed: { fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 },
+  elapsed: { fontSize: 11, color: 'rgba(255,255,255,0.28)' },
 });
