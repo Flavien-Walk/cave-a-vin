@@ -25,6 +25,7 @@ interface AuthState {
   loadSession:      () => Promise<boolean>;
   updateMe:         (name?: string, password?: string) => Promise<void>;
   setProfilePhoto:  (uri: string | null) => Promise<void>;
+  uploadProfilePhoto: (localUri: string) => Promise<void>;
 }
 
 const TOKEN_KEY = 'cave_token';
@@ -91,6 +92,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await AsyncStorage.removeItem(PROFILE_PHOTO_KEY);
     }
     set({ profilePhotoUri: uri });
+  },
+
+  uploadProfilePhoto: async (localUri) => {
+    const { token } = get();
+    // Sauvegarder localement d'abord (réponse immédiate dans l'UI)
+    await AsyncStorage.setItem(PROFILE_PHOTO_KEY, localUri);
+    set({ profilePhotoUri: localUri });
+    // Envoyer au backend
+    try {
+      const formData = new FormData();
+      formData.append('avatar', { uri: localUri, name: 'avatar.jpg', type: 'image/jpeg' } as any);
+      const res = await fetch(API_URL + '/api/auth/avatar', {
+        method: 'PUT',
+        body: formData,
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (res.ok) {
+        const { user } = await res.json();
+        // Mettre à jour l'user avec avatarUrl depuis le backend
+        set({ user });
+        await store.set(USER_KEY, JSON.stringify(user));
+      }
+    } catch { /* silencieux — photo locale déjà enregistrée */ }
   },
 
   preRegister: async (email) => {

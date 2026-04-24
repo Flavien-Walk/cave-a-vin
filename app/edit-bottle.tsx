@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, Spacing, Radius } from '../src/constants';
 import { COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../src/constants';
 import { useBottleStore, useCavesStore } from '../src/stores';
@@ -24,7 +26,7 @@ const formatOptions: SelectOption[]  = FORMATS_BOUTEILLE.map(f => ({ label: f.la
 
 export default function EditBottleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { bottles, updateBottle, localPhotos, updateLocalPhoto } = useBottleStore();
+  const { bottles, updateBottle, localPhotos, updateLocalPhoto, uploadBottlePhoto } = useBottleStore();
   const { caves, fetchCaves } = useCavesStore();
 
   // Photo
@@ -79,6 +81,24 @@ export default function EditBottleScreen() {
       Alert.alert('Erreur', 'Impossible de prendre la photo.');
     } finally {
       setCapturing(false);
+    }
+  };
+
+  const openGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission refusée', 'Autorisez l\'accès à la galerie dans les réglages.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const compressed = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      setPhotoUri(compressed.uri);
     }
   };
 
@@ -153,11 +173,15 @@ export default function EditBottleScreen() {
         emplacement,
       });
 
-      // Gérer le changement de photo localement
+      // Gérer le changement de photo : upload DB + local
       const currentPhoto = localPhotos[id!] ?? null;
       const photoChanged = photoUri !== currentPhoto;
       if (photoChanged) {
-        await updateLocalPhoto(id!, photoUri);
+        if (photoUri) {
+          await uploadBottlePhoto(id!, photoUri); // upload DB + local
+        } else {
+          await updateLocalPhoto(id!, null); // suppression locale uniquement
+        }
       }
 
       router.back();
@@ -211,16 +235,25 @@ export default function EditBottleScreen() {
                 <TouchableOpacity onPress={openCamera} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="camera-outline" size={20} color={Colors.lieDeVin} />
                 </TouchableOpacity>
+                <TouchableOpacity onPress={openGallery} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="images-outline" size={20} color={Colors.lieDeVin} />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={removePhoto} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="close-circle-outline" size={20} color={Colors.rougeAlerte} />
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
-            <TouchableOpacity style={s.photoAdd} onPress={openCamera} activeOpacity={0.8}>
-              <Ionicons name="camera-outline" size={22} color={Colors.lieDeVin} />
-              <Text style={s.photoAddText}>Ajouter une photo</Text>
-            </TouchableOpacity>
+            <View style={s.photoAddRow}>
+              <TouchableOpacity style={[s.photoAdd, { flex: 1 }]} onPress={openCamera} activeOpacity={0.8}>
+                <Ionicons name="camera-outline" size={22} color={Colors.lieDeVin} />
+                <Text style={s.photoAddText}>Caméra</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.photoAdd, { flex: 1 }]} onPress={openGallery} activeOpacity={0.8}>
+                <Ionicons name="images-outline" size={22} color={Colors.lieDeVin} />
+                <Text style={s.photoAddText}>Galerie</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           <Text style={[s.sectionLabel, { marginTop: Spacing.lg }]}>Identité</Text>
@@ -316,7 +349,8 @@ const s = StyleSheet.create({
   photoTitle:   { fontSize: 13, fontWeight: '700', color: Colors.vertSauge },
   photoSub:     { fontSize: 11, color: Colors.brunMoyen, marginTop: 2 },
   photoActions: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
-  photoAdd:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.champagne, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', borderStyle: 'dashed', padding: Spacing.lg, marginBottom: Spacing.lg },
+  photoAddRow:  { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  photoAdd:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.champagne, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.lieDeVin + '30', borderStyle: 'dashed', padding: Spacing.lg },
   photoAddText: { fontSize: 14, fontWeight: '600', color: Colors.lieDeVin },
 });
 

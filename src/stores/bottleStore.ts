@@ -64,6 +64,7 @@ interface BottleState {
   addBottle: (data: CreateBottleDto, localPhotoUri?: string) => Promise<void>;
   updateBottle: (id: string, data: UpdateBottleDto) => Promise<void>;
   updateLocalPhoto: (id: string, photoUri: string | null) => Promise<void>;
+  uploadBottlePhoto: (id: string, localUri: string) => Promise<void>;
   deleteBottle: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   drinkBottle: (id: string, payload: { quantity?: number; note?: number; comment?: string; occasion?: string }) => Promise<void>;
@@ -131,6 +132,29 @@ export const useBottleStore = create<BottleState>((set, get) => ({
   updateBottle: async (id, data) => {
     const updated = await bottlesApi.update(id, data);
     set(s => ({ bottles: s.bottles.map(b => b._id === id ? updated : b) }));
+  },
+
+  uploadBottlePhoto: async (id, localUri) => {
+    try {
+      const SecureStore = await import('expo-secure-store');
+      const token = await SecureStore.getItemAsync('cave_token');
+      const formData = new FormData();
+      formData.append('photo', { uri: localUri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+      const res = await fetch(`${(await import('../constants')).API_URL}/api/bottles/${id}/photo`, {
+        method: 'PUT',
+        body: formData,
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Mettre à jour le photoUrl de la bouteille dans le store local
+        set(s => ({
+          bottles: s.bottles.map(b => b._id === id ? { ...b, photoUrl: data.photoUrl } : b),
+        }));
+      }
+    } catch { /* silencieux — la photo locale reste disponible */ }
+    // Toujours sauvegarder localement aussi
+    await get().updateLocalPhoto(id, localUri);
   },
 
   updateLocalPhoto: async (id, photoUri) => {

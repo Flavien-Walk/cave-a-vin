@@ -116,6 +116,15 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* ── Anecdote du jour ── */}
+        <TouchableOpacity style={s.anecdote} activeOpacity={0.75} onPress={() => {}}>
+          <Text style={s.anecdoteEmoji}>{todayAnecdote.emoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.anecdoteLabel}>Le saviez-vous ?</Text>
+            <Text style={s.anecdoteText}>{todayAnecdote.text}</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* ── Onboarding : aucune cave ── */}
         {!isLoading && caves.length === 0 && (
           <TouchableOpacity style={s.onboardingCard} onPress={() => router.push('/manage-caves' as any)} activeOpacity={0.85}>
@@ -203,15 +212,6 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
         )}
-
-        {/* ── Anecdote du jour ── */}
-        <TouchableOpacity style={s.anecdote} activeOpacity={0.75} onPress={() => {}}>
-          <Text style={s.anecdoteEmoji}>{todayAnecdote.emoji}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.anecdoteLabel}>Le saviez-vous ?</Text>
-            <Text style={s.anecdoteText}>{todayAnecdote.text}</Text>
-          </View>
-        </TouchableOpacity>
 
         <View style={{ height: 100 }} />
       </ScrollView>

@@ -1,17 +1,19 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator, TextInput, Image, Modal,
+  Alert, ActivityIndicator, TextInput, Image, Modal, ActionSheetIOS, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../src/constants';
 import { useAuthStore, useBottleStore } from '../src/stores';
 
 export default function ProfileScreen() {
-  const { user, logout, updateMe, profilePhotoUri, setProfilePhoto } = useAuthStore();
+  const { user, logout, updateMe, profilePhotoUri, setProfilePhoto, uploadProfilePhoto } = useAuthStore();
   const { bottles } = useBottleStore();
 
   const [editingName, setEditingName] = useState(false);
@@ -23,6 +25,33 @@ export default function ProfileScreen() {
   const [capturing, setCapturing] = useState(false);
   const [permission, requestPerm] = useCameraPermissions();
   const cameraRef                 = useRef<any>(null);
+
+  const compressPhoto = async (uri: string) => {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 400 } }],
+      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return result.uri;
+  };
+
+  const handlePhotoSource = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Annuler', 'Prendre une photo', 'Choisir dans la galerie'], cancelButtonIndex: 0 },
+        async (idx) => {
+          if (idx === 1) await openCamera();
+          if (idx === 2) await pickFromGallery();
+        }
+      );
+    } else {
+      Alert.alert('Photo de profil', undefined, [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Caméra', onPress: openCamera },
+        { text: 'Galerie', onPress: pickFromGallery },
+      ]);
+    }
+  };
 
   const openCamera = async () => {
     if (!permission?.granted) {
@@ -37,12 +66,28 @@ export default function ProfileScreen() {
     setCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
-      await setProfilePhoto(photo.uri);
+      const compressed = await compressPhoto(photo.uri);
       setShowCam(false);
+      await uploadProfilePhoto(compressed);
     } catch {
       Alert.alert('Erreur', 'Impossible de prendre la photo.');
     } finally {
       setCapturing(false);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission refusée', 'Autorisez l\'accès à la galerie dans les réglages.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const compressed = await compressPhoto(result.assets[0].uri);
+      await uploadProfilePhoto(compressed);
     }
   };
 
@@ -113,7 +158,7 @@ export default function ProfileScreen() {
                 </View>
               )
             }
-            <TouchableOpacity style={s.avatarEditBtn} onPress={openCamera} activeOpacity={0.8}>
+            <TouchableOpacity style={s.avatarEditBtn} onPress={handlePhotoSource} activeOpacity={0.8}>
               <Ionicons name="camera" size={14} color={Colors.white} />
             </TouchableOpacity>
             {profilePhotoUri && (

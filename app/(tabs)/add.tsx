@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, Spacing, Radius, API_URL } from '../../src/constants';
 import { COULEURS_VIN, FORMATS_BOUTEILLE, PAYS, REGIONS, APPELLATIONS } from '../../src/constants';
 import { useBottleStore, useCavesStore } from '../../src/stores';
@@ -37,7 +39,7 @@ const paysOptions:    SelectOption[] = PAYS.map(p => ({ label: p, value: p }));
 const formatOptions:  SelectOption[] = FORMATS_BOUTEILLE.map(f => ({ label: f.label, value: f.value }));
 
 export default function AddScreen() {
-  const { addBottle, bottles, localPhotos } = useBottleStore();
+  const { addBottle, uploadBottlePhoto, bottles, localPhotos } = useBottleStore();
   const { caves, activeCave, activeLieu, fetchCaves } = useCavesStore();
   const [step, setStep]       = useState(0);
   const [loading, setLoading] = useState(false);
@@ -238,6 +240,24 @@ export default function AddScreen() {
     setShowScan(true);
   };
 
+  const openGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission refusée', 'Autorisez l\'accès à la galerie dans les réglages.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const compressed = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      setPhotoUri(compressed.uri);
+    }
+  };
+
   const takePhoto = async () => {
     if (!cameraRef.current || scanning) return;
     setScanning(true);
@@ -342,6 +362,7 @@ export default function AddScreen() {
     if (!validateStep()) return;
     setLoading(true);
     try {
+      // addBottle crée la bouteille ET sauvegarde la photo localement
       await addBottle({
         nom: nom.trim(), producteur: producteur.trim() || undefined,
         couleur: (couleur as CouleurVin) || undefined,
@@ -356,6 +377,12 @@ export default function AddScreen() {
         notePerso: notePerso > 0 ? { note: notePerso, texte: '' } : undefined,
         source: 'manual', cave, emplacement,
       }, photoUri ?? undefined);
+      // Uploader la photo vers la DB (après création, on a l'id via le store)
+      if (photoUri) {
+        const { bottles: updatedBottles } = useBottleStore.getState();
+        const created = updatedBottles[0]; // addBottle met la nouvelle bouteille en tête
+        if (created) await uploadBottlePhoto(created._id, photoUri);
+      }
       resetForm();
       router.back();
     } catch (e: any) {
@@ -458,6 +485,12 @@ export default function AddScreen() {
                       <Text style={s.photoCtaBtnText}>Prendre une photo</Text>
                       <Text style={s.photoCtaBtnSub}>Saisie manuelle des champs</Text>
                     </TouchableOpacity>
+                    <View style={s.photoCtaDivider} />
+                    <TouchableOpacity style={s.photoCtaBtn} onPress={openGallery} activeOpacity={0.8}>
+                      <Ionicons name="images-outline" size={24} color={Colors.lieDeVin} />
+                      <Text style={s.photoCtaBtnText}>Galerie</Text>
+                      <Text style={s.photoCtaBtnSub}>Depuis vos photos</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ) : (
@@ -473,6 +506,9 @@ export default function AddScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => openCamera(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons name="camera-outline" size={20} color={Colors.lieDeVin} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={openGallery} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="images-outline" size={20} color={Colors.lieDeVin} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setPhotoUri(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons name="close-circle-outline" size={20} color={Colors.rougeAlerte} />
