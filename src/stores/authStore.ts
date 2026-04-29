@@ -24,6 +24,7 @@ interface AuthState {
   logout:           () => Promise<void>;
   loadSession:      () => Promise<boolean>;
   updateMe:         (name?: string, password?: string) => Promise<void>;
+  deleteMe:         (password: string) => Promise<void>;
   setProfilePhoto:  (uri: string | null) => Promise<void>;
   uploadProfilePhoto: (localUri: string) => Promise<void>;
 }
@@ -165,5 +166,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     await store.set(USER_KEY, JSON.stringify(user));
     set({ user });
+  },
+
+  deleteMe: async (password) => {
+    const { token } = get();
+    await apiFetch('/api/auth/me', {
+      method: 'DELETE',
+      token: token!,
+      body: JSON.stringify({ password }),
+    });
+    await Promise.all([
+      store.delete(TOKEN_KEY),
+      store.delete(USER_KEY),
+    ]);
+    set({ user: null, token: null, isLoading: false });
   },
 }));

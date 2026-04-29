@@ -13,12 +13,17 @@ import { Colors, Spacing, Radius, Shadow, Typography } from '../src/constants';
 import { useAuthStore, useBottleStore } from '../src/stores';
 
 export default function ProfileScreen() {
-  const { user, logout, updateMe, profilePhotoUri, setProfilePhoto, uploadProfilePhoto } = useAuthStore();
+  const { user, logout, updateMe, deleteMe, profilePhotoUri, setProfilePhoto, uploadProfilePhoto } = useAuthStore();
   const { bottles } = useBottleStore();
 
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName]         = useState(user?.name ?? '');
   const [savingName, setSavingName]   = useState(false);
+
+  // Suppression de compte
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword]   = useState('');
+  const [deleting, setDeleting]               = useState(false);
 
   // Photo de profil
   const [showCam, setShowCam]     = useState(false);
@@ -132,6 +137,31 @@ export default function ProfileScreen() {
         },
       ]
     );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer mon compte',
+      'Cette action est irréversible. Toutes vos bouteilles, caves, listes et données seront définitivement supprimées.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Continuer', style: 'destructive', onPress: () => { setDeletePassword(''); setShowDeleteModal(true); } },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deletePassword) return;
+    setDeleting(true);
+    try {
+      await deleteMe(deletePassword);
+      setShowDeleteModal(false);
+      router.replace('/(auth)/login');
+    } catch (e: any) {
+      Alert.alert('Erreur', e.message ?? 'Mot de passe incorrect ou erreur réseau.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -250,16 +280,70 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* Section Légal */}
+        <SectionHeader label="Légal & confidentialité" />
+        <View style={s.card}>
+          <Row
+            icon="shield-checkmark-outline"
+            label="Politique de confidentialité"
+            onPress={() => router.push('/privacy')}
+          />
+          <Divider />
+          <Row
+            icon="document-text-outline"
+            label="Conditions d'utilisation"
+            onPress={() => router.push('/privacy')}
+          />
+        </View>
+
         {/* Déconnexion */}
         <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
           <Ionicons name="log-out-outline" size={18} color={Colors.rougeAlerte} />
           <Text style={s.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
 
+        {/* Suppression de compte */}
+        <SectionHeader label="Zone de danger" />
+        <TouchableOpacity style={s.deleteBtn} onPress={handleDeleteAccount} activeOpacity={0.8}>
+          <Ionicons name="trash-outline" size={16} color={Colors.rougeAlerte} />
+          <Text style={s.deleteText}>Supprimer mon compte</Text>
+        </TouchableOpacity>
+
         <Text style={s.version}>CAVOU v2.0 · Flavien</Text>
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Modal suppression de compte */}
+      <Modal visible={showDeleteModal} transparent animationType="fade">
+        <View style={del.backdrop}>
+          <View style={del.box}>
+            <Ionicons name="warning-outline" size={32} color={Colors.rougeAlerte} style={{ marginBottom: Spacing.sm }} />
+            <Text style={del.title}>Confirmer la suppression</Text>
+            <Text style={del.sub}>Entrez votre mot de passe pour confirmer. Cette action est définitive.</Text>
+            <TextInput
+              style={del.input}
+              placeholder="Mot de passe"
+              placeholderTextColor={Colors.brunClair}
+              secureTextEntry
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              autoFocus
+            />
+            <View style={del.row}>
+              <TouchableOpacity style={del.cancelBtn} onPress={() => setShowDeleteModal(false)} disabled={deleting}>
+                <Text style={del.cancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={del.confirmBtn} onPress={confirmDeleteAccount} disabled={deleting || !deletePassword}>
+                {deleting
+                  ? <ActivityIndicator size="small" color={Colors.white} />
+                  : <Text style={del.confirmText}>Supprimer</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal caméra — photo de profil */}
       <Modal visible={showCam} animationType="slide">
@@ -373,7 +457,18 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.rougeAlerte + '40',
   },
   logoutText: { ...Typography.body, color: Colors.rougeAlerte, fontWeight: '700' },
-  version:    { ...Typography.caption, color: Colors.brunClair, textAlign: 'center', marginTop: Spacing.xl },
+
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, marginTop: Spacing.xs,
+    paddingVertical: 14,
+    borderRadius: Radius.xl,
+    borderWidth: 1, borderColor: Colors.rougeAlerte + '30',
+    backgroundColor: Colors.rougeAlerteLight,
+  },
+  deleteText: { ...Typography.body, color: Colors.rougeAlerte, fontWeight: '600' },
+
+  version: { ...Typography.caption, color: Colors.brunClair, textAlign: 'center', marginTop: Spacing.xl },
 });
 
 const cam = StyleSheet.create({
@@ -386,4 +481,17 @@ const cam = StyleSheet.create({
   shutterArea:  { alignItems: 'center', paddingBottom: 64 },
   shutter:      { width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: Colors.white },
   shutterInner: { width: 54, height: 54, borderRadius: 27, backgroundColor: Colors.white },
+});
+
+const del = StyleSheet.create({
+  backdrop:   { flex: 1, backgroundColor: 'rgba(26,16,8,0.6)', justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
+  box:        { backgroundColor: Colors.champagne, borderRadius: Radius.xl, padding: Spacing.xl, width: '100%', alignItems: 'center', ...Shadow.lg },
+  title:      { fontSize: 17, fontWeight: '800', color: Colors.brunMoka, marginBottom: Spacing.xs },
+  sub:        { fontSize: 13, color: Colors.brunMoyen, textAlign: 'center', lineHeight: 20, marginBottom: Spacing.lg },
+  input:      { width: '100%', borderWidth: 1.5, borderColor: Colors.parchemin, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 12, fontSize: 15, color: Colors.brunMoka, marginBottom: Spacing.lg, backgroundColor: Colors.cremeIvoire },
+  row:        { flexDirection: 'row', gap: Spacing.sm, width: '100%' },
+  cancelBtn:  { flex: 1, paddingVertical: 14, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center' },
+  cancelText: { fontSize: 14, fontWeight: '600', color: Colors.brunMoyen },
+  confirmBtn: { flex: 1, paddingVertical: 14, borderRadius: Radius.lg, backgroundColor: Colors.rougeAlerte, alignItems: 'center' },
+  confirmText:{ fontSize: 14, fontWeight: '700', color: Colors.white },
 });
