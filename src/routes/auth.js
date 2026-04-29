@@ -30,9 +30,10 @@ const emailLimiter = rateLimit({
 router.post('/pre-register',    emailLimiter, ctrl.preRegister);
 router.post('/register',        authLimiter,  ctrl.register);
 router.post('/login',           authLimiter,  ctrl.login);
-router.get( '/me',              authMiddleware, ctrl.me);
-router.put( '/me',              authMiddleware, ctrl.updateMe);
-router.put( '/avatar',          authMiddleware, upload.single('avatar'), ctrl.uploadAvatar);
+router.get(   '/me',   authMiddleware, ctrl.me);
+router.put(   '/me',   authMiddleware, ctrl.updateMe);
+router.delete('/me',   authMiddleware, ctrl.deleteMe);
+router.put(   '/avatar', authMiddleware, upload.single('avatar'), ctrl.uploadAvatar);
 router.post('/forgot-password', emailLimiter, ctrl.forgotPassword);
 router.post('/reset-password',  authLimiter,  ctrl.resetPassword);
 

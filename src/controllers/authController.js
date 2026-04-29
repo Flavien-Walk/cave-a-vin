@@ -1,6 +1,10 @@
 const crypto               = require('crypto');
 const User                 = require('../models/User');
 const PendingVerification  = require('../models/PendingVerification');
+const Bottle               = require('../models/Bottle');
+const ConsumptionHistory   = require('../models/ConsumptionHistory');
+const WishlistItem         = require('../models/WishlistItem');
+const UserCave             = require('../models/UserCave');
 const { signToken }        = require('../middleware/auth');
 const { sendWelcomeEmail, sendResetCodeEmail, sendVerificationCodeEmail } = require('../services/emailService');
 
@@ -177,5 +181,32 @@ exports.resetPassword = async (req, res, next) => {
 
     const token = signToken(user._id);
     res.json({ message: 'Mot de passe mis à jour.', token, user: user.toPublic() });
+  } catch (err) { next(err); }
+};
+
+// DELETE /api/auth/me — suppression définitive du compte et de toutes les données
+exports.deleteMe = async (req, res, next) => {
+  try {
+    const { password } = req.body;
+    if (!password)
+      return res.status(400).json({ message: 'Mot de passe requis pour confirmer la suppression.' });
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+
+    const ok = await user.checkPassword(password);
+    if (!ok) return res.status(401).json({ message: 'Mot de passe incorrect.' });
+
+    const userId = req.userId;
+    await Promise.all([
+      Bottle.deleteMany({ userId }),
+      ConsumptionHistory.deleteMany({ userId }),
+      WishlistItem.deleteMany({ userId }),
+      UserCave.deleteMany({ userId }),
+      PendingVerification.deleteOne({ email: user.email }),
+    ]);
+    await User.findByIdAndDelete(userId);
+
+    res.json({ message: 'Compte et toutes les données associées supprimés définitivement.' });
   } catch (err) { next(err); }
 };
