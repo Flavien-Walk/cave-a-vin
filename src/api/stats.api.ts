@@ -1,5 +1,5 @@
 import client from './client';
-import type { CaveStats, CaveValueData, DashboardData } from '../types';
+import type { CaveStats, CaveValueData, DashboardData, InsightsData } from '../types';
 
 export const statsApi = {
   getSummary: () =>
@@ -10,4 +10,7 @@ export const statsApi = {
 
   getDashboard: () =>
     client.get<DashboardData>('/api/stats/dashboard').then(r => r.data),
+
+  getInsights: () =>
+    client.get<InsightsData>('/api/stats/insights').then(r => r.data),
 };

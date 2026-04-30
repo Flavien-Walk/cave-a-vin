@@ -121,6 +121,29 @@ export interface CaveValueData {
   totalBottles: number;
   byCave: { cave: string; totalValue: number; totalBottles: number }[];
   byColor: { couleur: string; totalValue: number; totalBottles: number }[];
+  pricedCount: number;
+  avgPrice: number;
+  maxPrice: number;
+}
+
+export interface InsightsData {
+  priceInsights: {
+    pricedCount: number;
+    avgPrice: number;
+    maxPrice: number;
+    minPrice: number;
+  };
+  ratingInsights: {
+    ratedCount: number;
+    avgRating: number | null;
+  };
+  vintageInsights: {
+    recentCount: number;
+    oldCount: number;
+  };
+  colorRatings: { couleur: string; avgNote: number; count: number }[];
+  unpricedCount: number;
+  unratedCount: number;
 }
 
 export interface DashboardData {

@@ -25,11 +25,10 @@ export default function CaveValueScreen() {
     try {
       const [value, { items, pagination }] = await Promise.all([
         statsApi.getCaveValue(),
-        bottlesApi.getAll(1, 50),
+        bottlesApi.getByValue(1, 50),
       ]);
-      const sorted = [...items].sort((a, b) => (b.prixAchat ?? 0) - (a.prixAchat ?? 0));
       setValueData(value);
-      setBottles(sorted);
+      setBottles(items);
       setPage(1);
       setHasNext(pagination.hasNextPage);
     } catch (e: any) {
@@ -44,9 +43,8 @@ export default function CaveValueScreen() {
     setIsLoadMore(true);
     try {
       const nextPage = page + 1;
-      const { items, pagination } = await bottlesApi.getAll(nextPage, 50);
-      const sorted = [...items].sort((a, b) => (b.prixAchat ?? 0) - (a.prixAchat ?? 0));
-      setBottles(prev => [...prev, ...sorted]);
+      const { items, pagination } = await bottlesApi.getByValue(nextPage, 50);
+      setBottles(prev => [...prev, ...items]);
       setPage(nextPage);
       setHasNext(pagination.hasNextPage);
     } catch { /* silencieux */ }
@@ -57,10 +55,10 @@ export default function CaveValueScreen() {
 
   const totalValue   = valueData?.totalValue   ?? 0;
   const totalBottles = valueData?.totalBottles ?? 0;
-  const pricedCount  = bottles.filter(b => b.prixAchat && b.prixAchat > 0).length;
-  const pricedPct    = bottles.length > 0 ? Math.round((pricedCount / bottles.length) * 100) : 0;
-  const avgPrice     = pricedCount > 0 ? bottles.filter(b => b.prixAchat && b.prixAchat > 0).reduce((s, b) => s + (b.prixAchat ?? 0), 0) / pricedCount : 0;
-  const lowDataWarning = pricedPct < 50 && bottles.length > 0;
+  const pricedCount  = valueData?.pricedCount  ?? 0;
+  const avgPrice     = valueData?.avgPrice     ?? 0;
+  const pricedPct    = totalBottles > 0 ? Math.round((pricedCount / totalBottles) * 100) : 0;
+  const lowDataWarning = pricedPct < 50 && totalBottles > 0;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -113,8 +111,8 @@ export default function CaveValueScreen() {
                 </View>
                 <View style={s.statDivider} />
                 <View style={s.statCell}>
-                  <Text style={s.statValue}>{bottles.length}</Text>
-                  <Text style={s.statLabel}>Références</Text>
+                  <Text style={s.statValue}>{pricedCount}</Text>
+                  <Text style={s.statLabel}>Pricées</Text>
                 </View>
               </View>
 

@@ -50,6 +50,12 @@ export const bottlesApi = {
   deleteNote: (id: string, noteId: string) =>
     client.delete<Bottle>(`/api/bottles/${id}/notes/${noteId}`).then(r => r.data),
 
+  getByValue: (page = 1, limit = 50) =>
+    client.get<PaginatedBottles>('/api/bottles/by-value', { params: { page, limit } }).then(r => r.data),
+
+  getAvailable: () =>
+    client.get<{ bottles: Bottle[]; total: number }>('/api/bottles/available').then(r => r.data),
+
   recommend: () =>
     client.get<Bottle[]>('/api/bottles/recommend').then(r => r.data),
 

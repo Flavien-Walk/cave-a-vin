@@ -4,10 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
 import { useBottleStore } from '../../src/stores';
-import { bottlesApi } from '../../src/api';
+import { bottlesApi, statsApi } from '../../src/api';
 import { getWineColorHex, formatPrice } from '../../src/utils/bottle.utils';
 import { router, useFocusEffect } from 'expo-router';
-import type { CaveStats, Bottle } from '../../src/types';
+import type { CaveStats, Bottle, InsightsData } from '../../src/types';
 
 const WINE_LABELS: Record<string, string> = {
   rouge: 'Rouge', blanc: 'Blanc', rosé: 'Rosé',
@@ -18,12 +18,12 @@ const WINE_LABELS: Record<string, string> = {
 
 interface Insight { icon: any; color: string; text: string; urgent?: boolean }
 
-function computeInsights(stats: CaveStats, bottles: Bottle[]): Insight[] {
-  const insights: Insight[] = [];
+function computeInsights(stats: CaveStats, insightsData: InsightsData): Insight[] {
+  const list: Insight[] = [];
 
   // 1. Alerte urgence
   if (stats.urgent > 0) {
-    insights.push({ icon: 'warning-outline', color: Colors.rougeAlerte, urgent: true,
+    list.push({ icon: 'warning-outline', color: Colors.rougeAlerte, urgent: true,
       text: `${stats.urgent} bouteille${stats.urgent > 1 ? 's' : ''} à ouvrir de toute urgence` });
   }
 
@@ -33,21 +33,18 @@ function computeInsights(stats: CaveStats, bottles: Bottle[]): Insight[] {
     const pct = Math.round((top.count / stats.totalBottles) * 100);
     const lbl = (WINE_LABELS[top.couleur] ?? top.couleur).toLowerCase();
     if (pct >= 60) {
-      insights.push({ icon: 'wine', color: getWineColorHex(top.couleur),
+      list.push({ icon: 'wine', color: getWineColorHex(top.couleur),
         text: `Cave dominée par les ${lbl}s — ${pct}% de vos bouteilles` });
     } else if (stats.byColor.length >= 3) {
-      insights.push({ icon: 'color-palette-outline', color: Colors.rosePale,
+      list.push({ icon: 'color-palette-outline', color: Colors.rosePale,
         text: `Cave bien diversifiée — ${stats.byColor.length} couleurs différentes` });
     }
   }
 
-  // 3. Prix / valeur
-  const priced = bottles.filter(b => b.prixAchat && b.prixAchat > 0);
-  if (priced.length >= 3) {
-    const avg = priced.reduce((s, b) => s + (b.prixAchat ?? 0), 0) / priced.length;
-    const max = Math.max(...priced.map(b => b.prixAchat ?? 0));
-    insights.push({ icon: 'pricetag-outline', color: Colors.ambreChaud,
-      text: `Prix moyen d'achat ${Math.round(avg)} € · bouteille la plus chère ${Math.round(max)} €` });
+  // 3. Prix / valeur — données globales backend
+  if (insightsData.priceInsights.pricedCount >= 3) {
+    list.push({ icon: 'pricetag-outline', color: Colors.ambreChaud,
+      text: `Prix moyen d'achat ${Math.round(insightsData.priceInsights.avgPrice)} € · bouteille la plus chère ${Math.round(insightsData.priceInsights.maxPrice)} €` });
   }
 
   // 4. Concentration géographique
@@ -55,31 +52,30 @@ function computeInsights(stats: CaveStats, bottles: Bottle[]): Insight[] {
     const top = [...stats.byRegion].sort((a, b) => b.count - a.count)[0];
     const pct = Math.round((top.count / stats.totalBottles) * 100);
     if (pct >= 45) {
-      insights.push({ icon: 'map-outline', color: Colors.lieDeVin,
+      list.push({ icon: 'map-outline', color: Colors.lieDeVin,
         text: `Cave essentiellement ${top.region} (${pct}% de vos bouteilles)` });
     } else if (stats.byRegion.length >= 5) {
-      insights.push({ icon: 'map-outline', color: Colors.lieDeVin,
+      list.push({ icon: 'map-outline', color: Colors.lieDeVin,
         text: `Belle diversité régionale — ${stats.byRegion.length} régions représentées` });
     }
   }
 
-  // 5. Notes
-  const rated = bottles.filter(b => b.notePerso?.note != null);
-  if (rated.length >= 3) {
-    const avg = rated.reduce((s, b) => s + b.notePerso!.note, 0) / rated.length;
-    insights.push({ icon: 'star-outline', color: Colors.ambreChaud,
-      text: `Note moyenne ${avg.toFixed(1)}/5 sur ${rated.length} vin${rated.length > 1 ? 's' : ''} dégusté${rated.length > 1 ? 's' : ''}` });
+  // 5. Notes — données globales backend
+  if (insightsData.ratingInsights.ratedCount >= 3 && insightsData.ratingInsights.avgRating != null) {
+    const rc = insightsData.ratingInsights.ratedCount;
+    list.push({ icon: 'star-outline', color: Colors.ambreChaud,
+      text: `Note moyenne ${insightsData.ratingInsights.avgRating.toFixed(1)}/5 sur ${rc} vin${rc > 1 ? 's' : ''} noté${rc > 1 ? 's' : ''}` });
   }
 
   // 6. Diversité des millésimes
   if (stats.byYear.length >= 6) {
     const years = stats.byYear.map(y => y.annee).filter(Boolean);
     const span  = years.length > 1 ? Math.max(...years) - Math.min(...years) : 0;
-    insights.push({ icon: 'calendar-outline', color: Colors.brunMoyen,
+    list.push({ icon: 'calendar-outline', color: Colors.brunMoyen,
       text: `${stats.byYear.length} millésimes différents — de ${Math.min(...years)} à ${Math.max(...years)} (${span} ans de cave)` });
   }
 
-  return insights.slice(0, 5);
+  return list.slice(0, 5);
 }
 
 // ── Équilibre cave ─────────────────────────────────────────────────────────────
@@ -138,7 +134,7 @@ function computeEquilibre(stats: CaveStats): EquilibreItem[] {
 
 // ── Profil textuel ────────────────────────────────────────────────────────────
 
-function computeProfil(stats: CaveStats, bottles: Bottle[]): string[] {
+function computeProfil(stats: CaveStats, insightsData: InsightsData): string[] {
   if (!stats.totalBottles || stats.totalBottles === 0) return [];
   const lines: string[] = [];
 
@@ -169,12 +165,11 @@ function computeProfil(stats: CaveStats, bottles: Bottle[]): string[] {
     lines.push(`Votre couleur de prédilection est le ${lbl.toLowerCase()}.`);
   }
 
-  // Millésimes
-  const recentBottles = bottles.filter(b => b.annee && b.annee >= new Date().getFullYear() - 5);
-  const oldBottles    = bottles.filter(b => b.annee && b.annee <= new Date().getFullYear() - 15);
-  if (oldBottles.length >= 5 && oldBottles.length > recentBottles.length) {
+  // Millésimes — données globales backend
+  const { recentCount, oldCount } = insightsData.vintageInsights;
+  if (oldCount >= 5 && oldCount > recentCount) {
     lines.push('Vous préférez les vins de garde — belle patience de vigneron.');
-  } else if (recentBottles.length >= 5 && recentBottles.length > oldBottles.length * 2) {
+  } else if (recentCount >= 5 && recentCount > oldCount * 2) {
     lines.push('Vous achetez surtout des millésimes récents — style accessible et prêt-à-boire.');
   }
 
@@ -183,7 +178,7 @@ function computeProfil(stats: CaveStats, bottles: Bottle[]): string[] {
 
 // ── Recommandations ────────────────────────────────────────────────────────────
 
-function computeRecommandations(stats: CaveStats, bottles: Bottle[]): string[] {
+function computeRecommandations(stats: CaveStats, insightsData: InsightsData): string[] {
   if (!stats.totalBottles || stats.totalBottles === 0) return [];
   const recs: string[] = [];
   const byC: Record<string, number> = {};
@@ -202,68 +197,52 @@ function computeRecommandations(stats: CaveStats, bottles: Bottle[]): string[] {
   if (stats.urgent > 3) {
     recs.push(`Vous avez ${stats.urgent} bouteilles urgentes — organisez une dégustation pour les valoriser avant qu'il ne soit trop tard.`);
   }
-  const unpriced = bottles.filter(b => !b.prixAchat || b.prixAchat === 0).length;
-  if (unpriced > total * 0.4) {
-    recs.push(`${unpriced} bouteilles n'ont pas de prix renseigné — complétez-les pour suivre la valeur réelle de votre cave.`);
+  // Bouteilles sans prix / sans note — données globales backend
+  if (insightsData.unpricedCount > total * 0.4) {
+    recs.push(`${insightsData.unpricedCount} bouteilles n'ont pas de prix renseigné — complétez-les pour suivre la valeur réelle de votre cave.`);
   }
-  const unrated = bottles.filter(b => !b.notePerso?.note).length;
-  if (unrated > total * 0.5) {
+  if (insightsData.unratedCount > total * 0.5) {
     recs.push('Notez vos bouteilles au fur et à mesure — cela améliore les recommandations d\'accords.');
   }
 
   return recs.slice(0, 4);
 }
 
-// ── Goûts par couleur ─────────────────────────────────────────────────────────
-
-interface TasteItem { couleur: string; avg: number; count: number }
-
-function computeGoûts(bottles: Bottle[]): TasteItem[] {
-  const byColor: Record<string, { sum: number; count: number }> = {};
-  for (const b of bottles) {
-    if (!b.notePerso?.note || !b.couleur) continue;
-    const c = b.couleur.toLowerCase();
-    if (!byColor[c]) byColor[c] = { sum: 0, count: 0 };
-    byColor[c].sum   += b.notePerso.note;
-    byColor[c].count += 1;
-  }
-  return Object.entries(byColor)
-    .filter(([, v]) => v.count >= 2)
-    .map(([couleur, v]) => ({ couleur, avg: Math.round((v.sum / v.count) * 10) / 10, count: v.count }))
-    .sort((a, b) => b.avg - a.avg);
-}
-
 // ── Screen ─────────────────────────────────────────────────────────────────────
 
 export default function StatsScreen() {
   const { stats, bottles, isStatsLoading, fetchStats } = useBottleStore();
-  const [urgentBottles, setUrgentBottles] = useState<Bottle[]>([]);
+  const [urgentBottles, setUrgentBottles]   = useState<Bottle[]>([]);
   const [lowStockBottles, setLowStockBottles] = useState<Bottle[]>([]);
+  const [insightsData, setInsightsData]     = useState<InsightsData | null>(null);
 
   const loadUrgentAndStats = useCallback(async () => {
     fetchStats();
     try {
-      const { items } = await bottlesApi.getUrgent(1, 50);
+      const [{ items }, data] = await Promise.all([
+        bottlesApi.getUrgent(1, 50),
+        statsApi.getInsights(),
+      ]);
       setUrgentBottles(items);
+      setInsightsData(data);
     } catch { /* silencieux */ }
   }, [fetchStats]);
 
   useEffect(() => { loadUrgentAndStats(); }, []);
   useFocusEffect(useCallback(() => { loadUrgentAndStats(); }, [loadUrgentAndStats]));
 
-  // lowStock: dernière bouteille d'une référence, non urgente
-  // Reste sur bottles local — indicateur secondaire, limite acceptable
+  // lowStock: dernière bouteille d'une référence, non urgente — indicateur secondaire, local OK
   const lowStock = useMemo(
     () => bottles.filter(b => b.quantite === 1 && !(b.consommerAvant && b.consommerAvant <= new Date().getFullYear() + 1)),
     [bottles]
   );
   useEffect(() => { setLowStockBottles(lowStock); }, [lowStock]);
 
-  const insights        = useMemo(() => stats && bottles.length > 0 ? computeInsights(stats, bottles)       : [], [stats, bottles]);
-  const equilibre       = useMemo(() => stats ? computeEquilibre(stats)                                      : [], [stats]);
-  const profil          = useMemo(() => stats ? computeProfil(stats, bottles)                                : [], [stats, bottles]);
-  const recommandations = useMemo(() => stats ? computeRecommandations(stats, bottles)                       : [], [stats, bottles]);
-  const goûts           = useMemo(() => computeGoûts(bottles), [bottles]);
+  const insights        = useMemo(() => stats && insightsData ? computeInsights(stats, insightsData)        : [], [stats, insightsData]);
+  const equilibre       = useMemo(() => stats ? computeEquilibre(stats)                                     : [], [stats]);
+  const profil          = useMemo(() => stats && insightsData ? computeProfil(stats, insightsData)          : [], [stats, insightsData]);
+  const recommandations = useMemo(() => stats && insightsData ? computeRecommandations(stats, insightsData) : [], [stats, insightsData]);
+  const colorRatings    = insightsData?.colorRatings ?? [];
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -393,20 +372,20 @@ export default function StatsScreen() {
               </SectionCard>
             )}
 
-            {/* ── Goûts (notes par couleur) ── */}
-            {goûts.length >= 2 && (
+            {/* ── Goûts (notes par couleur — données globales backend) ── */}
+            {colorRatings.length >= 2 && (
               <SectionCard icon="star-outline" label="Mes goûts" color={Colors.ambreChaud}>
                 <Text style={s.goûtsSub}>Vos notes moyennes par couleur</Text>
-                {goûts.map(g => (
+                {colorRatings.map(g => (
                   <View key={g.couleur} style={s.goûtRow}>
                     <View style={[s.goûtDot, { backgroundColor: getWineColorHex(g.couleur) }]} />
                     <Text style={s.goûtLabel}>{WINE_LABELS[g.couleur] ?? g.couleur}</Text>
                     <View style={s.goûtStars}>
                       {[1,2,3,4,5].map(n => (
-                        <View key={n} style={[s.goûtBar, { backgroundColor: n <= Math.round(g.avg) ? Colors.ambreChaud : Colors.parchemin }]} />
+                        <View key={n} style={[s.goûtBar, { backgroundColor: n <= Math.round(g.avgNote) ? Colors.ambreChaud : Colors.parchemin }]} />
                       ))}
                     </View>
-                    <Text style={s.goûtNote}>{g.avg.toFixed(1)}</Text>
+                    <Text style={s.goûtNote}>{g.avgNote.toFixed(1)}</Text>
                     <Text style={s.goûtCount}>({g.count})</Text>
                   </View>
                 ))}

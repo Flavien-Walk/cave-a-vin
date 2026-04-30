@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
-import { useWishlistStore, useBottleStore, useCavesStore } from '../../src/stores';
+import { useWishlistStore, useCavesStore } from '../../src/stores';
 import { bottlesApi } from '../../src/api';
 import { Input, Button, WineBadge, StarRating } from '../../src/components/ui';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -30,17 +30,26 @@ const SUGGESTIONS_CATEGORIES = [
 const QUICK_SUGGESTIONS = ['Entrecôte', 'Saumon', 'Huîtres', 'Foie gras', 'Fromages', 'Magret', 'Poulet rôti'] as const;
 
 export default function DiscoverScreen() {
-  const { bottles, fetchBottles } = useBottleStore();
   const { caves, activeLieu } = useCavesStore();
   const { items, isLoading, fetchItems, addItem, deleteItem, markPurchased } = useWishlistStore();
 
+  // Toutes les bouteilles disponibles depuis le backend — pour les accords mets-vins
+  const [allBottles, setAllBottles] = useState<Bottle[]>([]);
+
+  const loadAvailableBottles = useCallback(async () => {
+    try {
+      const { bottles } = await bottlesApi.getAvailable();
+      setAllBottles(bottles);
+    } catch { /* silencieux */ }
+  }, []);
+
   // Bouteilles filtrées par lieu actif pour les accords mets-vins
   const bottlesInLieu = useMemo(() => {
-    if (!activeLieu) return bottles;
+    if (!activeLieu) return allBottles;
     const caveNames = caves.filter(c => c.location === activeLieu).map(c => c.name);
-    if (!caveNames.length) return bottles;
-    return bottles.filter(b => caveNames.includes(b.cave ?? ''));
-  }, [bottles, caves, activeLieu]);
+    if (!caveNames.length) return allBottles;
+    return allBottles.filter(b => caveNames.includes(b.cave ?? ''));
+  }, [allBottles, caves, activeLieu]);
   const [activeTab, setActiveTab] = useState<Tab>('Accords & plats');
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
 
@@ -75,9 +84,8 @@ export default function DiscoverScreen() {
   const [wishNote, setWishNote]       = useState('');
   const [addLoading, setAddLoading]   = useState(false);
 
-  useEffect(() => { fetchItems(); fetchBottles(); }, []);
-  // Rafraîchit les bouteilles à chaque focus pour que les accords restent à jour
-  useFocusEffect(useCallback(() => { fetchBottles(); }, []));
+  useEffect(() => { fetchItems(); loadAvailableBottles(); }, []);
+  useFocusEffect(useCallback(() => { loadAvailableBottles(); }, [loadAvailableBottles]));
 
   useEffect(() => {
     if (activeTab === 'À boire bientôt') loadUrgents();
