@@ -7,6 +7,7 @@ export interface AuthUser {
   _id: string;
   name: string;
   email: string;
+  avatarUrl: string | null;
   createdAt: string;
 }
 
@@ -77,12 +78,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         store.get(USER_KEY),
         AsyncStorage.getItem(PROFILE_PHOTO_KEY),
       ]);
-      if (profilePhoto) set({ profilePhotoUri: profilePhoto });
       if (token && userJson) {
         const user = JSON.parse(userJson) as AuthUser;
+        // Fallback : si pas de photo locale, utiliser avatarUrl du backend
+        const effectivePhoto = profilePhoto ?? user.avatarUrl ?? null;
+        if (effectivePhoto) set({ profilePhotoUri: effectivePhoto });
         set({ user, token, isLoading: false });
         try {
           const { user: fresh } = await apiFetch('/api/auth/me', { token });
+          // Rafraîchit aussi la photo si avatarUrl a changé depuis un autre appareil
+          if (!profilePhoto && fresh.avatarUrl) set({ profilePhotoUri: fresh.avatarUrl });
           set({ user: fresh });
           await store.set(USER_KEY, JSON.stringify(fresh));
         } catch {
