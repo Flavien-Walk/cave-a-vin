@@ -23,7 +23,7 @@ const SORT_OPTIONS = [
 ] as const;
 
 export default function CaveScreen() {
-  const { bottles, isLoading, isLoadingMore, hasNextPage, fetchBottles, loadMoreBottles } = useBottleStore();
+  const { bottles, isLoading, isLoadingMore, hasNextPage, error, fetchBottles, loadMoreBottles, clearError } = useBottleStore();
   const { caveView, activeFilters, searchQuery, sortBy, setCaveView, setFilter, clearFilters, setSearchQuery, setSortBy } = useUIStore();
   const { caves, activeLieu } = useCavesStore();
   const [showFilters, setShowFilters] = useState(false);
@@ -59,6 +59,15 @@ export default function CaveScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+
+      {/* ── Bannière erreur réseau ── */}
+      {error ? (
+        <TouchableOpacity style={styles.errorBanner} onPress={clearError} activeOpacity={0.8}>
+          <Ionicons name="wifi-outline" size={16} color={Colors.white} />
+          <Text style={styles.errorBannerText}>{error}</Text>
+          <Ionicons name="close" size={14} color={Colors.white} />
+        </TouchableOpacity>
+      ) : null}
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -214,6 +223,8 @@ export default function CaveScreen() {
 
 const styles = StyleSheet.create({
   safe:  { flex: 1, backgroundColor: Colors.cremeIvoire },
+  errorBanner:     { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.rougeAlerte, paddingHorizontal: Spacing.lg, paddingVertical: 10 },
+  errorBannerText: { flex: 1, fontSize: 13, color: Colors.white, fontWeight: '600' },
 
   header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
   headerLeft:    { flex: 1, marginRight: Spacing.sm },

@@ -297,6 +297,14 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* Note stockage local */}
+        <View style={s.localStorageNote}>
+          <Ionicons name="information-circle-outline" size={15} color={Colors.brunClair} />
+          <Text style={s.localStorageText}>
+            Les photos de bouteilles scannées sont stockées localement sur cet appareil. Elles ne sont pas sauvegardées dans le cloud et seront perdues en cas de réinstallation.
+          </Text>
+        </View>
+
         {/* Section Légal */}
         <SectionHeader label="Légal & confidentialité" />
         <View style={s.card}>
@@ -537,6 +545,9 @@ const s = StyleSheet.create({
   deleteText: { ...Typography.body, color: Colors.rougeAlerte, fontWeight: '600' },
 
   version: { ...Typography.caption, color: Colors.brunClair, textAlign: 'center', marginTop: Spacing.xl },
+
+  localStorageNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.champagne, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.parchemin, padding: Spacing.md, marginBottom: Spacing.sm },
+  localStorageText: { flex: 1, fontSize: 12, color: Colors.brunClair, lineHeight: 18 },
 });
 
 const cam = StyleSheet.create({
