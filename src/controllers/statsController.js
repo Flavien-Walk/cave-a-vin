@@ -5,7 +5,7 @@ exports.getCaveValue = async (req, res, next) => {
   try {
     const uid = req.userId;
 
-    const [aggregate, byCave, byColor] = await Promise.all([
+    const [aggregate, byCave, byColor, priceAgg] = await Promise.all([
       Bottle.aggregate([
         { $match: { userId: uid, quantite: { $gt: 0 } } },
         { $group: {
@@ -34,6 +34,15 @@ exports.getCaveValue = async (req, res, next) => {
         { $sort: { totalValue: -1 } },
         { $project: { couleur: '$_id', totalValue: { $round: ['$totalValue', 2] }, totalBottles: 1, _id: 0 } },
       ]),
+      Bottle.aggregate([
+        { $match: { userId: uid, prixAchat: { $gt: 0 }, quantite: { $gt: 0 } } },
+        { $group: {
+            _id:        null,
+            pricedCount: { $sum: 1 },
+            avgPrice:    { $avg: '$prixAchat' },
+            maxPrice:    { $max: '$prixAchat' },
+        }},
+      ]),
     ]);
 
     res.json({
@@ -41,6 +50,9 @@ exports.getCaveValue = async (req, res, next) => {
       totalBottles: aggregate[0]?.totalBottles ?? 0,
       byCave,
       byColor,
+      pricedCount:  priceAgg[0]?.pricedCount  ?? 0,
+      avgPrice:     Math.round((priceAgg[0]?.avgPrice ?? 0) * 100) / 100,
+      maxPrice:     priceAgg[0]?.maxPrice ?? 0,
     });
   } catch (err) { next(err); }
 };
@@ -82,6 +94,75 @@ exports.getDashboard = async (req, res, next) => {
       urgentPreview,
       favoritesPreview,
       recentBottles,
+    });
+  } catch (err) { next(err); }
+};
+
+exports.getInsights = async (req, res, next) => {
+  try {
+    const uid  = req.userId;
+    const year = new Date().getFullYear();
+
+    const [priceAgg, ratingAgg, vintageAgg, colorRatings, unpricedCount, unratedCount] = await Promise.all([
+      Bottle.aggregate([
+        { $match: { userId: uid, prixAchat: { $gt: 0 }, quantite: { $gt: 0 } } },
+        { $group: {
+            _id: null,
+            pricedCount: { $sum: 1 },
+            avgPrice:    { $avg: '$prixAchat' },
+            maxPrice:    { $max: '$prixAchat' },
+            minPrice:    { $min: '$prixAchat' },
+        }},
+      ]),
+      Bottle.aggregate([
+        { $match: { userId: uid, 'notePerso.note': { $exists: true, $ne: null } } },
+        { $group: {
+            _id: null,
+            ratedCount: { $sum: 1 },
+            avgRating:  { $avg: '$notePerso.note' },
+        }},
+      ]),
+      Bottle.aggregate([
+        { $match: { userId: uid, annee: { $exists: true, $gt: 0 }, quantite: { $gt: 0 } } },
+        { $group: {
+            _id: null,
+            recentCount: { $sum: { $cond: [{ $gte: ['$annee', year - 5] }, 1, 0] } },
+            oldCount:    { $sum: { $cond: [{ $lte: ['$annee', year - 15] }, 1, 0] } },
+        }},
+      ]),
+      Bottle.aggregate([
+        { $match: { userId: uid, 'notePerso.note': { $exists: true, $ne: null }, couleur: { $exists: true } } },
+        { $group: {
+            _id:     '$couleur',
+            avgNote: { $avg: '$notePerso.note' },
+            count:   { $sum: 1 },
+        }},
+        { $match: { count: { $gte: 2 } } },
+        { $sort: { avgNote: -1 } },
+        { $project: { couleur: '$_id', avgNote: { $round: ['$avgNote', 1] }, count: 1, _id: 0 } },
+      ]),
+      Bottle.countDocuments({ userId: uid, $or: [{ prixAchat: { $exists: false } }, { prixAchat: 0 }, { prixAchat: null }], quantite: { $gt: 0 } }),
+      Bottle.countDocuments({ userId: uid, 'notePerso.note': { $exists: false }, quantite: { $gt: 0 } }),
+    ]);
+
+    res.json({
+      priceInsights: priceAgg[0] ? {
+        pricedCount: priceAgg[0].pricedCount,
+        avgPrice:    Math.round((priceAgg[0].avgPrice ?? 0) * 100) / 100,
+        maxPrice:    priceAgg[0].maxPrice ?? 0,
+        minPrice:    priceAgg[0].minPrice ?? 0,
+      } : { pricedCount: 0, avgPrice: 0, maxPrice: 0, minPrice: 0 },
+      ratingInsights: ratingAgg[0] ? {
+        ratedCount: ratingAgg[0].ratedCount,
+        avgRating:  Math.round((ratingAgg[0].avgRating ?? 0) * 10) / 10,
+      } : { ratedCount: 0, avgRating: null },
+      vintageInsights: vintageAgg[0] ? {
+        recentCount: vintageAgg[0].recentCount,
+        oldCount:    vintageAgg[0].oldCount,
+      } : { recentCount: 0, oldCount: 0 },
+      colorRatings,
+      unpricedCount,
+      unratedCount,
     });
   } catch (err) { next(err); }
 };

@@ -106,6 +106,10 @@ BottleSchema.index({ userId: 1, consommerAvant: 1, quantite: 1 });
 BottleSchema.index({ userId: 1, cave: 1, createdAt: -1 });
 // Composition par couleur — agrégation stats/cave-value
 BottleSchema.index({ userId: 1, couleur: 1, createdAt: -1 });
+// Bouteilles triées par valeur — GET /api/bottles/by-value
+BottleSchema.index({ userId: 1, prixAchat: -1, quantite: 1 });
+// Notes personnelles — GET /api/stats/insights
+BottleSchema.index({ userId: 1, 'notePerso.note': 1 });
 // Index simples conservés pour les requêtes ponctuelles
 BottleSchema.index({ annee: 1 });
 BottleSchema.index({ cave: 1, emplacement: 1 });

@@ -65,6 +65,43 @@ exports.getUrgent = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── GET /api/bottles/by-value ─────────────────────────────────────────────────
+exports.getByValue = async (req, res, next) => {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip  = (page - 1) * limit;
+
+    const query = { userId: req.userId, prixAchat: { $gt: 0 }, quantite: { $gt: 0 } };
+    const total = await Bottle.countDocuments(query);
+
+    const items = await Bottle.aggregate([
+      { $match: { userId: req.userId, prixAchat: { $gt: 0 }, quantite: { $gt: 0 } } },
+      { $addFields: { valeurTotale: { $multiply: ['$prixAchat', '$quantite'] } } },
+      { $sort: { valeurTotale: -1, createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ]);
+
+    const totalPages = Math.ceil(total / limit) || 1;
+    res.json({
+      items,
+      pagination: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+    });
+  } catch (err) { next(err); }
+};
+
+// ── GET /api/bottles/available ────────────────────────────────────────────────
+exports.getAvailable = async (req, res, next) => {
+  try {
+    const bottles = await Bottle.find({ userId: req.userId, quantite: { $gt: 0 } })
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+    res.json({ bottles, total: bottles.length });
+  } catch (err) { next(err); }
+};
+
 // ── GET /api/bottles ─────────────────────────────────────────────────────────
 exports.getAll = async (req, res, next) => {
   try {
