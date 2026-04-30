@@ -36,6 +36,8 @@ router.get('/recommend',             c.recommend);
 router.get('/taste-profile',         c.getTasteProfile);
 router.get('/smart-recommendations', c.getSmartRecommendations);
 router.post('/suggest-wine',         c.suggestWine);
+router.get('/low-stock',             c.getLowStock);
+router.post('/recommend-for-dish',   c.recommendForDish);
 // scan-label : auth + rate limit spécifique + validation MIME
 router.post('/scan-label', scanLimiter, upload.single('image'), c.scanLabel);
 

@@ -91,6 +91,164 @@ exports.getByValue = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── GET /api/bottles/low-stock ────────────────────────────────────────────────
+exports.getLowStock = async (req, res, next) => {
+  try {
+    const year  = new Date().getFullYear();
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip  = (page - 1) * limit;
+
+    const query = {
+      userId: req.userId,
+      quantite: 1,
+      $or: [
+        { consommerAvant: { $exists: false } },
+        { consommerAvant: null },
+        { consommerAvant: { $gt: year + 1 } },
+      ],
+    };
+
+    const [items, total] = await Promise.all([
+      Bottle.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Bottle.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(total / limit) || 1;
+    res.json({
+      items,
+      pagination: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+    });
+  } catch (err) { next(err); }
+};
+
+// ── POST /api/bottles/recommend-for-dish ──────────────────────────────────────
+exports.recommendForDish = async (req, res, next) => {
+  try {
+    const platRaw = req.body?.plat;
+    if (!platRaw || typeof platRaw !== 'string' || !platRaw.trim())
+      return res.status(400).json({ message: 'Champ "plat" requis et non vide.' });
+    const plat = platRaw.trim();
+
+    const { detectFood }              = require('../data/foodPairings');
+    const { getUserNote, groupBottles, scoreGroup } = require('../utils/recommendation');
+
+    const pairing = detectFood(plat);
+
+    // Filtre couleur : n'interroger que les bouteilles des couleurs pertinentes
+    let colorFilter = {};
+    if (pairing) {
+      const relevantColors = [...new Set([
+        ...pairing.ideal.couleurs,
+        ...pairing.bon.couleurs,
+        ...pairing.acceptable.couleurs,
+      ])];
+      if (relevantColors.length > 0) colorFilter = { couleur: { $in: relevantColors } };
+    }
+
+    // Filtre optionnel par cave (activeLieu côté frontend)
+    const caveFilter = req.body.caves;
+    const query = { userId: req.userId, quantite: { $gt: 0 }, ...colorFilter };
+    if (Array.isArray(caveFilter) && caveFilter.length > 0)
+      query.cave = { $in: caveFilter };
+
+    const bottles = await Bottle.find(query).lean();
+    const groups  = groupBottles(bottles);
+
+    // Plat non reconnu → top des mieux notés
+    if (!pairing) {
+      const topRated = groups
+        .filter(g => getUserNote(g.representative) !== null)
+        .sort((a, b) => (getUserNote(b.representative) ?? 0) - (getUserNote(a.representative) ?? 0))
+        .slice(0, 3)
+        .map(g => ({
+          bottle: g.representative,
+          allOccurrences: g.allOccurrences.map(b => ({ _id: b._id, cave: b.cave, quantite: b.quantite })),
+          totalQty: g.totalQty,
+          score: Math.round(((getUserNote(g.representative) ?? 3) / 5) * 60 + 20),
+          match: 'bon',
+          reasons: ['Bien noté'],
+          explanation: 'Sélection basée sur vos notes personnelles.',
+        }));
+
+      return res.json({
+        plat,
+        detectedFamilies: [],
+        recommendations: topRated,
+        avoid: [],
+        message: topRated.length
+          ? 'Plat non reconnu — voici vos bouteilles les mieux notées.'
+          : 'Plat non reconnu — ajoutez des notes pour des suggestions personnalisées.',
+        bestLevel: topRated.length ? 'bon' : 'aucun',
+        idealSuggestion: undefined,
+        foodLabel: plat,
+      });
+    }
+
+    const toItem = ({ g, s }) => ({
+      bottle: g.representative,
+      allOccurrences: g.allOccurrences.map(b => ({ _id: b._id, cave: b.cave, quantite: b.quantite })),
+      totalQty: g.totalQty,
+      score: s.score,
+      match: s.match,
+      reasons: s.factors,
+      explanation: s.explanation,
+      caveat: s.caveat,
+    });
+
+    const scored = groups
+      .map(g => ({ g, s: scoreGroup(g, pairing) }))
+      .filter(x => x.s.score >= 8)
+      .sort((a, b) => b.s.score - a.s.score);
+
+    const ideals    = scored.filter(x => x.s.match === 'ideal');
+    const bons      = scored.filter(x => x.s.match === 'bon');
+    const compromis = scored.filter(x => x.s.match === 'compromis');
+
+    let bestLevel = 'aucun';
+    let recoList  = [];
+    let message   = '';
+    let idealSuggestion;
+
+    if (ideals.length > 0) {
+      bestLevel = 'ideal';
+      recoList  = [...ideals, ...bons].slice(0, 5).map(toItem);
+      message   = ideals.length === 1
+        ? '1 accord idéal trouvé dans votre cave.'
+        : `${ideals.length} accords idéaux dans votre cave.`;
+    } else if (bons.length > 0) {
+      bestLevel = 'bon';
+      recoList  = bons.slice(0, 5).map(toItem);
+      message   = bons.length === 1
+        ? "Pas d'accord parfait mais 1 bon accord disponible."
+        : `Pas d'accord parfait mais ${bons.length} bons accords disponibles.`;
+      idealSuggestion = pairing.texteAchat;
+    } else if (compromis.length > 0) {
+      bestLevel = 'compromis';
+      recoList  = compromis.slice(0, 3).map(toItem);
+      message   = 'Aucun accord idéal dans votre cave pour ce plat. Ces vins peuvent dépanner.';
+      idealSuggestion = pairing.texteAchat;
+    } else {
+      bestLevel = 'aucun';
+      message   = `Aucun vin disponible ne correspond à "${plat}".`;
+      idealSuggestion = pairing.texteAchat;
+    }
+
+    res.json({
+      plat,
+      detectedFamilies: [pairing.id],
+      recommendations: recoList,
+      avoid: pairing.eviter?.couleurs ?? [],
+      message,
+      bestLevel,
+      idealSuggestion: idealSuggestion
+        ? `Si votre cave ne contient pas le bon vin — ${idealSuggestion}`
+        : undefined,
+      foodLabel: plat,
+    });
+  } catch (err) { next(err); }
+};
+
 // ── GET /api/bottles/available ────────────────────────────────────────────────
 exports.getAvailable = async (req, res, next) => {
   try {

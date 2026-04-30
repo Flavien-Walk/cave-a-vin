@@ -110,6 +110,8 @@ BottleSchema.index({ userId: 1, couleur: 1, createdAt: -1 });
 BottleSchema.index({ userId: 1, prixAchat: -1, quantite: 1 });
 // Notes personnelles — GET /api/stats/insights
 BottleSchema.index({ userId: 1, 'notePerso.note': 1 });
+// Low-stock — GET /api/bottles/low-stock
+BottleSchema.index({ userId: 1, quantite: 1, createdAt: -1 });
 // Index simples conservés pour les requêtes ponctuelles
 BottleSchema.index({ annee: 1 });
 BottleSchema.index({ cave: 1, emplacement: 1 });
