@@ -14,7 +14,7 @@ export interface PaginatedBottles {
 }
 
 export const bottlesApi = {
-  getAll: (page = 1, limit = 50) =>
+  getAll: (page = 1, limit = 200) =>
     client.get<PaginatedBottles>('/api/bottles', { params: { page, limit } }).then(r => r.data),
 
   getOne: (id: string) =>
