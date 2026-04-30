@@ -211,7 +211,7 @@ function computeRecommandations(stats: CaveStats, insightsData: InsightsData): s
 // ── Screen ─────────────────────────────────────────────────────────────────────
 
 export default function StatsScreen() {
-  const { stats, bottles, isStatsLoading, fetchStats } = useBottleStore();
+  const { stats, isStatsLoading, fetchStats } = useBottleStore();
   const [urgentBottles, setUrgentBottles]   = useState<Bottle[]>([]);
   const [lowStockBottles, setLowStockBottles] = useState<Bottle[]>([]);
   const [insightsData, setInsightsData]     = useState<InsightsData | null>(null);
@@ -219,24 +219,19 @@ export default function StatsScreen() {
   const loadUrgentAndStats = useCallback(async () => {
     fetchStats();
     try {
-      const [{ items }, data] = await Promise.all([
+      const [{ items: urgentItems }, data, { items: lowItems }] = await Promise.all([
         bottlesApi.getUrgent(1, 50),
         statsApi.getInsights(),
+        bottlesApi.getLowStock(1, 50),
       ]);
-      setUrgentBottles(items);
+      setUrgentBottles(urgentItems);
       setInsightsData(data);
+      setLowStockBottles(lowItems);
     } catch { /* silencieux */ }
   }, [fetchStats]);
 
   useEffect(() => { loadUrgentAndStats(); }, []);
   useFocusEffect(useCallback(() => { loadUrgentAndStats(); }, [loadUrgentAndStats]));
-
-  // lowStock: dernière bouteille d'une référence, non urgente — indicateur secondaire, local OK
-  const lowStock = useMemo(
-    () => bottles.filter(b => b.quantite === 1 && !(b.consommerAvant && b.consommerAvant <= new Date().getFullYear() + 1)),
-    [bottles]
-  );
-  useEffect(() => { setLowStockBottles(lowStock); }, [lowStock]);
 
   const insights        = useMemo(() => stats && insightsData ? computeInsights(stats, insightsData)        : [], [stats, insightsData]);
   const equilibre       = useMemo(() => stats ? computeEquilibre(stats)                                     : [], [stats]);

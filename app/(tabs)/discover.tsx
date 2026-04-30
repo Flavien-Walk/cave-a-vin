@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Alert, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -10,11 +10,9 @@ import { useWishlistStore, useCavesStore } from '../../src/stores';
 import { bottlesApi } from '../../src/api';
 import { Input, Button, WineBadge, StarRating } from '../../src/components/ui';
 import { EmptyState } from '../../src/components/ui/EmptyState';
-import { getRecommendations, analyzeFood } from '../../src/utils/recommendation';
 import { getWineColorHex } from '../../src/utils/bottle.utils';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import type { WishlistItem, WishlistPriorite, Bottle, TasteProfile, SmartReco } from '../../src/types';
-import type { WineRecommendation, RecommendationResult } from '../../src/utils/recommendation';
+import type { WishlistItem, WishlistPriorite, Bottle, TasteProfile, SmartReco, DishRecoResult, DishRecoItem } from '../../src/types';
 
 const TABS = ['Accords & plats', 'Mes Goûts', 'À boire bientôt', 'Wishlist'] as const;
 type Tab = typeof TABS[number];
@@ -33,23 +31,6 @@ export default function DiscoverScreen() {
   const { caves, activeLieu } = useCavesStore();
   const { items, isLoading, fetchItems, addItem, deleteItem, markPurchased } = useWishlistStore();
 
-  // Toutes les bouteilles disponibles depuis le backend — pour les accords mets-vins
-  const [allBottles, setAllBottles] = useState<Bottle[]>([]);
-
-  const loadAvailableBottles = useCallback(async () => {
-    try {
-      const { bottles } = await bottlesApi.getAvailable();
-      setAllBottles(bottles);
-    } catch { /* silencieux */ }
-  }, []);
-
-  // Bouteilles filtrées par lieu actif pour les accords mets-vins
-  const bottlesInLieu = useMemo(() => {
-    if (!activeLieu) return allBottles;
-    const caveNames = caves.filter(c => c.location === activeLieu).map(c => c.name);
-    if (!caveNames.length) return allBottles;
-    return allBottles.filter(b => caveNames.includes(b.cave ?? ''));
-  }, [allBottles, caves, activeLieu]);
   const [activeTab, setActiveTab] = useState<Tab>('Accords & plats');
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
 
@@ -62,8 +43,9 @@ export default function DiscoverScreen() {
 
   // Accords
   const [plat, setPlat] = useState('');
-  const [recoResult, setRecoResult] = useState<RecommendationResult | null>(null);
+  const [recoResult, setRecoResult] = useState<DishRecoResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [recoLoading, setRecoLoading] = useState(false);
 
   // Mes Goûts
   const [tasteProfile,   setTasteProfile]   = useState<TasteProfile | null>(null);
@@ -84,8 +66,7 @@ export default function DiscoverScreen() {
   const [wishNote, setWishNote]       = useState('');
   const [addLoading, setAddLoading]   = useState(false);
 
-  useEffect(() => { fetchItems(); loadAvailableBottles(); }, []);
-  useFocusEffect(useCallback(() => { loadAvailableBottles(); }, [loadAvailableBottles]));
+  useEffect(() => { fetchItems(); }, []);
 
   useEffect(() => {
     if (activeTab === 'À boire bientôt') loadUrgents();
@@ -115,13 +96,23 @@ export default function DiscoverScreen() {
     finally { setUrgLoading(false); }
   };
 
-  const searchAccords = (query?: string) => {
+  const searchAccords = async (query?: string) => {
     const q = query ?? plat;
     if (!q.trim()) return;
     setPlat(q);
-    const results = getRecommendations(bottlesInLieu, q);
-    setRecoResult(results);
-    setHasSearched(true);
+    setRecoLoading(true);
+    try {
+      const caveNames = activeLieu
+        ? caves.filter(c => c.location === activeLieu).map(c => c.name)
+        : [];
+      const results = await bottlesApi.recommendForDish(q, caveNames.length ? caveNames : undefined);
+      setRecoResult(results);
+      setHasSearched(true);
+    } catch (e: any) {
+      Alert.alert('Erreur', e.message);
+    } finally {
+      setRecoLoading(false);
+    }
   };
 
   const clearSearch = () => {
@@ -142,8 +133,7 @@ export default function DiscoverScreen() {
 
   const activeItems    = items.filter(i => !i.isPurchased);
   const purchasedItems = items.filter(i => i.isPurchased);
-  const foodProfile    = hasSearched ? analyzeFood(plat) : null;
-  const recs           = recoResult?.wines ?? [];
+  const recs           = recoResult?.recommendations ?? [];
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -191,8 +181,11 @@ export default function DiscoverScreen() {
                   <Ionicons name="close-circle" size={18} color={Colors.brunClair} />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={s.searchBtn} onPress={() => searchAccords()}>
-                <Ionicons name="search" size={18} color={Colors.white} />
+              <TouchableOpacity style={s.searchBtn} onPress={() => searchAccords()} disabled={recoLoading}>
+                {recoLoading
+                  ? <ActivityIndicator size="small" color={Colors.white} />
+                  : <Ionicons name="search" size={18} color={Colors.white} />
+                }
               </TouchableOpacity>
             </View>
 
@@ -203,10 +196,10 @@ export default function DiscoverScreen() {
                   <Ionicons name="arrow-back" size={13} color={Colors.lieDeVin} />
                   <Text style={s.backToSuggText}>Changer de plat</Text>
                 </TouchableOpacity>
-                {foodProfile && (
+                {recoResult.foodLabel && (
                   <View style={s.profileBadge}>
                     <Text style={s.profileText}>
-                      Plat détecté : <Text style={{ fontWeight: '700' }}>{recoResult.foodLabel || foodProfile.label}</Text>
+                      Plat détecté : <Text style={{ fontWeight: '700' }}>{recoResult.foodLabel}</Text>
                     </Text>
                   </View>
                 )}
@@ -506,7 +499,7 @@ export default function DiscoverScreen() {
 
 // ── Composants ──
 
-const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
+const RecoCard = ({ rec, rank }: { rec: DishRecoItem; rank: number }) => {
   const matchColor = rec.match === 'ideal' ? Colors.vertSauge : rec.match === 'bon' ? Colors.ambreChaud : Colors.brunClair;
   const matchBg    = rec.match === 'ideal' ? Colors.vertSaugeLight : rec.match === 'bon' ? Colors.blancDoreLight : Colors.cremeIvoire;
   const matchLabel = rec.match === 'ideal' ? 'Accord idéal' : rec.match === 'bon' ? 'Bon accord' : 'Accord possible';
@@ -542,9 +535,9 @@ const RecoCard = ({ rec, rank }: { rec: WineRecommendation; rank: number }) => {
           </Text>
         </View>
         <Text style={rc.explanation}>{rec.explanation}</Text>
-        {rec.factors.length > 0 && (
+        {rec.reasons.length > 0 && (
           <View style={rc.factors}>
-            {rec.factors.map((f, i) => (
+            {rec.reasons.map((f, i) => (
               <View key={i} style={rc.factor}>
                 <Ionicons name="checkmark" size={11} color={Colors.vertSauge} />
                 <Text style={rc.factorText}>{f}</Text>

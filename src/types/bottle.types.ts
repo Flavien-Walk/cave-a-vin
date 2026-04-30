@@ -88,6 +88,28 @@ export interface TasteProfile {
   recentDrinks: RecentDrink[];
 }
 
+export interface DishRecoItem {
+  bottle: Bottle;
+  allOccurrences: Pick<Bottle, '_id' | 'cave' | 'quantite'>[];
+  totalQty: number;
+  score: number;
+  match: 'ideal' | 'bon' | 'compromis';
+  reasons: string[];
+  explanation: string;
+  caveat?: string;
+}
+
+export interface DishRecoResult {
+  plat: string;
+  detectedFamilies: string[];
+  recommendations: DishRecoItem[];
+  avoid: string[];
+  message: string;
+  bestLevel: 'ideal' | 'bon' | 'compromis' | 'aucun';
+  idealSuggestion?: string;
+  foodLabel: string;
+}
+
 export interface SmartReco {
   bottle: Bottle;
   score: number;

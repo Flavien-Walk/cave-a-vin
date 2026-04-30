@@ -1,5 +1,5 @@
 import client from './client';
-import type { Bottle, CreateBottleDto, UpdateBottleDto, ConsumptionEntry, TasteProfile, SmartRecommendations } from '../types';
+import type { Bottle, CreateBottleDto, UpdateBottleDto, ConsumptionEntry, TasteProfile, SmartRecommendations, DishRecoResult } from '../types';
 
 export interface PaginatedBottles {
   items: Bottle[];
@@ -67,4 +67,13 @@ export const bottlesApi = {
 
   suggestWine: (plat: string) =>
     client.post<{ plat: string; suggestions: string[]; bottles: Bottle[] }>('/api/bottles/suggest-wine', { plat }).then(r => r.data),
+
+  getLowStock: (page = 1, limit = 50) =>
+    client.get<PaginatedBottles>('/api/bottles/low-stock', { params: { page, limit } }).then(r => r.data),
+
+  recommendForDish: (plat: string, caves?: string[]) =>
+    client.post<DishRecoResult>('/api/bottles/recommend-for-dish', {
+      plat,
+      ...(caves?.length ? { caves } : {}),
+    }).then(r => r.data),
 };
