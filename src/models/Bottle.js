@@ -96,6 +96,7 @@ const BottleSchema = new mongoose.Schema({
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
 BottleSchema.index({ nom: 'text', producteur: 'text', region: 'text', appellation: 'text' });
+BottleSchema.index({ userId: 1, createdAt: -1 }); // pagination principale
 BottleSchema.index({ couleur: 1 });
 BottleSchema.index({ cave: 1, emplacement: 1 });
 BottleSchema.index({ annee: 1 });

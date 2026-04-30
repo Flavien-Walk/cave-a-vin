@@ -25,9 +25,27 @@ exports.uploadPhoto = async (req, res, next) => {
 // ── GET /api/bottles ─────────────────────────────────────────────────────────
 exports.getAll = async (req, res, next) => {
   try {
-    // Limite à 2000 bouteilles — garde-fou scalabilité (pagination à prévoir si dépassement)
-    const bottles = await Bottle.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(2000);
-    res.json(bottles);
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip  = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      Bottle.find({ userId: req.userId }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Bottle.countDocuments({ userId: req.userId }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+    res.json({
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
   } catch (err) { next(err); }
 };
 
