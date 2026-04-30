@@ -52,6 +52,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "privacyPolicyUrl": "https://flavien-walk.github.io/cave-a-vin/privacy.html",
       "eas": {
         "projectId": "4af28938-6c6c-4a6b-b661-3ea9d944bf29"
       }

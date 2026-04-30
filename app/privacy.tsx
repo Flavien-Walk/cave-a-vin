@@ -54,6 +54,7 @@ export default function PrivacyScreen() {
         </Text>
 
         <Text style={s.updated}>Dernière mise à jour : avril 2026</Text>
+        <Text style={s.updated}>Version web : https://flavien-walk.github.io/cave-a-vin/privacy.html</Text>
 
         {SECTIONS.map((sec) => (
           <View key={sec.title} style={s.section}>

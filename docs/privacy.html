@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Politique de confidentialité — CAVOU</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --lie-de-vin:  #6B1D30;
+      --brun-moka:   #2C1810;
+      --brun-moyen:  #6B4536;
+      --brun-clair:  #A07060;
+      --creme:       #FAF7F2;
+      --champagne:   #F5EFE6;
+      --parchemin:   #E8DDD0;
+      --ambre:       #C4783C;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--creme);
+      color: var(--brun-moka);
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    header {
+      background: var(--lie-de-vin);
+      color: #fff;
+      padding: 40px 24px 32px;
+      text-align: center;
+    }
+
+    header .app-name {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      opacity: 0.75;
+      margin-bottom: 10px;
+    }
+
+    header h1 {
+      font-size: clamp(22px, 5vw, 30px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+
+    header .updated {
+      font-size: 13px;
+      opacity: 0.65;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .intro {
+      background: var(--champagne);
+      border: 1px solid var(--parchemin);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 40px;
+      color: var(--brun-moyen);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    section {
+      margin-bottom: 36px;
+    }
+
+    h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--lie-de-vin);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--parchemin);
+    }
+
+    p {
+      color: var(--brun-moyen);
+      margin-bottom: 10px;
+      font-size: 15px;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      color: var(--brun-moyen);
+      font-size: 15px;
+    }
+
+    ul li {
+      padding: 5px 0 5px 20px;
+      position: relative;
+    }
+
+    ul li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: var(--lie-de-vin);
+      font-weight: 700;
+    }
+
+    .tag {
+      display: inline-block;
+      background: var(--lie-de-vin);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .tag.amber { background: var(--ambre); }
+    .tag.neutral { background: var(--brun-clair); }
+
+    .provider-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .provider-table th {
+      background: var(--champagne);
+      color: var(--brun-moka);
+      font-weight: 700;
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid var(--parchemin);
+    }
+
+    .provider-table td {
+      padding: 10px 12px;
+      border: 1px solid var(--parchemin);
+      color: var(--brun-moyen);
+      vertical-align: top;
+    }
+
+    .provider-table tr:nth-child(even) td {
+      background: var(--champagne);
+    }
+
+    .highlight-box {
+      background: #FFF8F0;
+      border-left: 4px solid var(--ambre);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 12px 0;
+      font-size: 14px;
+      color: var(--brun-moyen);
+    }
+
+    .no-tracking-box {
+      background: #F0FBF4;
+      border-left: 4px solid #3A8C5C;
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 12px 0;
+      font-size: 14px;
+      color: #2A5C3C;
+    }
+
+    .contact-box {
+      background: var(--champagne);
+      border: 1px solid var(--parchemin);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-top: 48px;
+    }
+
+    .contact-box p {
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .contact-box a {
+      color: var(--lie-de-vin);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .contact-box a:hover {
+      text-decoration: underline;
+    }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+      color: var(--brun-clair);
+      border-top: 1px solid var(--parchemin);
+    }
+
+    @media (max-width: 600px) {
+      .container { padding: 28px 16px 60px; }
+      header { padding: 32px 16px 24px; }
+      .provider-table th, .provider-table td { padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="app-name">CAVOU — Application mobile</div>
+  <h1>Politique de confidentialité</h1>
+  <div class="updated">Dernière mise à jour : avril 2026</div>
+</header>
+
+<div class="container">
+
+  <div class="intro">
+    CAVOU est une application mobile de gestion de cave à vin. Nous respectons votre vie privée.
+    Cette politique explique quelles données sont collectées, pourquoi, comment elles sont protégées,
+    et comment vous pouvez les contrôler ou les supprimer.
+  </div>
+
+  <!-- 1. Responsable -->
+  <section>
+    <h2>1. Responsable du traitement</h2>
+    <p><strong>Flavien Léo</strong></p>
+    <p>Contact : <a href="mailto:cavevin76@gmail.com">cavevin76@gmail.com</a></p>
+    <p>Application : CAVOU (identifiant : <code>com.lef69.caveavin</code>)</p>
+  </section>
+
+  <!-- 2. Données collectées -->
+  <section>
+    <h2>2. Données collectées</h2>
+    <p>CAVOU ne collecte que les données que vous saisissez volontairement ou que vous autorisez explicitement.</p>
+
+    <p><span class="tag">Compte</span></p>
+    <ul>
+      <li>Nom d'affichage</li>
+      <li>Adresse e-mail</li>
+      <li>Mot de passe (haché bcrypt — non lisible, jamais transmis en clair)</li>
+      <li>Photo de profil (stockée localement sur votre appareil uniquement)</li>
+    </ul>
+
+    <p style="margin-top:14px"><span class="tag">Cave</span></p>
+    <ul>
+      <li>Informations bouteilles : nom, producteur, région, appellation, cépage, couleur, format, millésime, pays</li>
+      <li>Stock : quantité, cave, emplacement</li>
+      <li>Achat : prix, lieu, date d'achat</li>
+      <li>Garde : dates de consommation optimale</li>
+      <li>Photos d'étiquettes (stockées localement sur votre appareil)</li>
+    </ul>
+
+    <p style="margin-top:14px"><span class="tag">Dégustation</span></p>
+    <ul>
+      <li>Notes personnelles (1–5 étoiles)</li>
+      <li>Commentaires de dégustation</li>
+      <li>Occasions (apéritif, repas, etc.)</li>
+      <li>Historique de consommation</li>
+    </ul>
+
+    <div class="highlight-box">
+      <strong>Scan d'étiquette :</strong> Lorsque vous utilisez la fonctionnalité de scan d'étiquette,
+      la photo prise est envoyée ponctuellement à l'API Anthropic (Claude Vision) pour extraction des informations.
+      La photo n'est pas conservée par Anthropic au-delà du traitement de la requête.
+      Voir la <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">politique de confidentialité d'Anthropic</a>.
+    </div>
+  </section>
+
+  <!-- 3. Finalités -->
+  <section>
+    <h2>3. Finalités du traitement</h2>
+    <ul>
+      <li>Fournir le service de gestion de cave personnelle</li>
+      <li>Générer vos statistiques de cave (composition, valeur, tendances)</li>
+      <li>Proposer des recommandations d'accords mets-vins (calcul backend, pas de transmission de données à des IA)</li>
+      <li>Envoyer des emails transactionnels : vérification d'email, bienvenue, réinitialisation de mot de passe</li>
+      <li>Permettre la reconnaissance d'étiquette via scan (avec consentement implicite à l'utilisation de la fonctionnalité)</li>
+    </ul>
+    <p style="margin-top:10px">Vos données ne sont jamais utilisées à des fins publicitaires, de profilage commercial ou de revente.</p>
+  </section>
+
+  <!-- 4. Sous-traitants -->
+  <section>
+    <h2>4. Sous-traitants et prestataires</h2>
+    <p>CAVOU fait appel aux prestataires suivants pour assurer le service :</p>
+    <table class="provider-table">
+      <thead>
+        <tr>
+          <th>Prestataire</th>
+          <th>Rôle</th>
+          <th>Données transmises</th>
+          <th>Localisation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>MongoDB Atlas</strong></td>
+          <td>Base de données</td>
+          <td>Compte, cave, dégustations</td>
+          <td>Europe (AWS)</td>
+        </tr>
+        <tr>
+          <td><strong>Render</strong></td>
+          <td>Hébergement backend</td>
+          <td>Toutes les requêtes API</td>
+          <td>Europe (Oregon/Frankfurt)</td>
+        </tr>
+        <tr>
+          <td><strong>Brevo</strong></td>
+          <td>Envoi d'emails</td>
+          <td>Adresse e-mail uniquement</td>
+          <td>Europe (France)</td>
+        </tr>
+        <tr>
+          <td><strong>Anthropic</strong></td>
+          <td>Reconnaissance d'étiquette (scan)</td>
+          <td>Photo d'étiquette, ponctuelle</td>
+          <td>États-Unis</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:10px;font-size:13px;color:var(--brun-clair)">
+      Les recommandations d'accords mets-vins sont calculées par notre propre backend — aucune donnée de cave n'est transmise à une IA externe pour cette fonctionnalité.
+    </p>
+  </section>
+
+  <!-- 5. Sécurité -->
+  <section>
+    <h2>5. Sécurité des données</h2>
+    <ul>
+      <li>Toutes les communications entre l'application et le backend sont chiffrées (HTTPS / TLS)</li>
+      <li>Votre mot de passe est haché avec bcrypt (facteur de coût 12) — il n'est jamais stocké en clair ni transmissible</li>
+      <li>Votre token d'authentification est stocké dans le trousseau sécurisé de votre appareil (Keychain iOS / Keystore Android)</li>
+      <li>Les données sont chiffrées au repos sur MongoDB Atlas</li>
+      <li>Chaque utilisateur accède uniquement à ses propres données (isolation par identifiant utilisateur)</li>
+    </ul>
+  </section>
+
+  <!-- 6. Conservation -->
+  <section>
+    <h2>6. Durée de conservation</h2>
+    <ul>
+      <li>Vos données sont conservées tant que votre compte est actif</li>
+      <li>La suppression de compte entraîne la suppression définitive de toutes vos données (bouteilles, caves, dégustations, compte) depuis nos serveurs</li>
+      <li>Les photos stockées localement sur votre appareil sont supprimées lors de la désinstallation de l'application</li>
+      <li>Les codes de vérification temporaires (inscription, réinitialisation) expirent automatiquement dans les 10 minutes</li>
+    </ul>
+  </section>
+
+  <!-- 7. Vos droits -->
+  <section>
+    <h2>7. Vos droits (RGPD)</h2>
+    <p>Conformément au Règlement Général sur la Protection des Données (RGPD — UE 2016/679) :</p>
+    <ul>
+      <li><strong>Droit d'accès :</strong> toutes vos données sont consultables directement depuis l'application</li>
+      <li><strong>Droit de rectification :</strong> modifiez vos informations à tout moment dans l'application</li>
+      <li><strong>Droit à l'effacement :</strong> supprimez définitivement votre compte depuis <em>Profil → Supprimer mon compte</em></li>
+      <li><strong>Droit à la portabilité :</strong> contactez-nous pour un export de vos données</li>
+      <li><strong>Droit d'opposition :</strong> vous pouvez refuser certains traitements non essentiels (ex : emails de bienvenue) en nous contactant</li>
+    </ul>
+    <p style="margin-top:10px">Pour exercer vos droits : <a href="mailto:cavevin76@gmail.com">cavevin76@gmail.com</a></p>
+  </section>
+
+  <!-- 8. Cookies / Tracking -->
+  <section>
+    <h2>8. Cookies et traceurs</h2>
+    <div class="no-tracking-box">
+      <strong>Aucun tracking publicitaire.</strong> CAVOU est une application mobile qui n'intègre ni SDK publicitaire, ni outil d'analytics tiers, ni cookie de tracking. Aucune donnée comportementale n'est collectée à des fins de profilage ou de publicité.
+    </div>
+    <p>L'application collecte uniquement des logs d'erreurs internes (sans identification personnelle) pour améliorer la stabilité du service.</p>
+  </section>
+
+  <!-- 9. Alcool -->
+  <section>
+    <h2>9. Contenu lié à l'alcool</h2>
+    <p>CAVOU est une application de gestion de cave à vin destinée aux adultes (18 ans et plus). Elle ne promeut pas la consommation d'alcool et ne comporte aucun contenu encourageant une consommation excessive. Elle est conçue comme un outil de gestion et de dégustation responsable.</p>
+  </section>
+
+  <!-- 10. Modifications -->
+  <section>
+    <h2>10. Modifications de cette politique</h2>
+    <p>Cette politique peut être mise à jour en cas d'évolution du service ou de la réglementation. La date de dernière mise à jour est indiquée en haut de cette page. Pour les modifications importantes, un email vous sera envoyé si votre adresse est enregistrée.</p>
+  </section>
+
+  <!-- Contact -->
+  <div class="contact-box">
+    <p style="font-size:13px;color:var(--brun-clair);margin-bottom:8px">QUESTIONS OU DEMANDES RGPD</p>
+    <p><strong>Flavien Léo</strong> — Responsable du traitement</p>
+    <p><a href="mailto:cavevin76@gmail.com">cavevin76@gmail.com</a></p>
+  </div>
+
+</div>
+
+<footer>
+  CAVOU &copy; 2026 · Flavien Léo · <a href="mailto:cavevin76@gmail.com" style="color:var(--brun-clair)">cavevin76@gmail.com</a>
+</footer>
+
+</body>
+</html>
