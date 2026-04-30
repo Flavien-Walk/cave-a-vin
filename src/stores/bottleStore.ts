@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { bottlesApi, statsApi } from '../api';
 import type { Bottle, CreateBottleDto, UpdateBottleDto, CaveStats } from '../types';
 
+
 // ── Persistance locale des photos (expo-file-system + AsyncStorage) ───────────
 // Les photos prises lors du scan d'étiquette sont stockées dans le répertoire
 // documentDirectory de l'app (persistent entre les sessions, supprimé à la
@@ -55,11 +56,15 @@ interface BottleState {
   bottles: Bottle[];
   stats: CaveStats | null;
   isLoading: boolean;
+  isLoadingMore: boolean;
   isStatsLoading: boolean;
   error: string | null;
   localPhotos: Record<string, string>; // bottleId → file:// URI
+  page: number;
+  hasNextPage: boolean;
 
   fetchBottles: () => Promise<void>;
+  loadMoreBottles: () => Promise<void>;
   fetchStats: () => Promise<void>;
   addBottle: (data: CreateBottleDto, localPhotoUri?: string) => Promise<void>;
   updateBottle: (id: string, data: UpdateBottleDto) => Promise<void>;
@@ -83,25 +88,42 @@ export const useBottleStore = create<BottleState>((set, get) => ({
   bottles: [],
   stats: null,
   isLoading: false,
+  isLoadingMore: false,
   isStatsLoading: false,
   error: null,
   localPhotos: {},
+  page: 1,
+  hasNextPage: false,
 
   fetchBottles: async () => {
     set({ isLoading: true, error: null });
     try {
-      const [bottles, localPhotosFromStorage] = await Promise.all([
-        bottlesApi.getAll(),
+      const [{ items, pagination }, localPhotosFromStorage] = await Promise.all([
+        bottlesApi.getAll(1),
         loadLocalPhotos(),
       ]);
-      // Keep freshest in-memory entries (e.g. just-created photos) while reloading storage.
-      const mergedLocalPhotos = {
-        ...localPhotosFromStorage,
-        ...get().localPhotos,
-      };
-      set({ bottles, localPhotos: mergedLocalPhotos, isLoading: false });
+      const mergedLocalPhotos = { ...localPhotosFromStorage, ...get().localPhotos };
+      set({ bottles: items, localPhotos: mergedLocalPhotos, isLoading: false, page: 1, hasNextPage: pagination.hasNextPage });
     } catch (err: any) {
       set({ isLoading: false, error: err.message });
+    }
+  },
+
+  loadMoreBottles: async () => {
+    const { isLoadingMore, hasNextPage, page } = get();
+    if (isLoadingMore || !hasNextPage) return;
+    set({ isLoadingMore: true });
+    try {
+      const nextPage = page + 1;
+      const { items, pagination } = await bottlesApi.getAll(nextPage);
+      set(s => ({
+        bottles: [...s.bottles, ...items],
+        isLoadingMore: false,
+        page: nextPage,
+        hasNextPage: pagination.hasNextPage,
+      }));
+    } catch (err: any) {
+      set({ isLoadingMore: false, error: err.message });
     }
   },
 

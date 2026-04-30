@@ -1,9 +1,21 @@
 import client from './client';
 import type { Bottle, CreateBottleDto, UpdateBottleDto, ConsumptionEntry, TasteProfile, SmartRecommendations } from '../types';
 
+export interface PaginatedBottles {
+  items: Bottle[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
 export const bottlesApi = {
-  getAll: () =>
-    client.get<Bottle[]>('/api/bottles').then(r => r.data),
+  getAll: (page = 1, limit = 50) =>
+    client.get<PaginatedBottles>('/api/bottles', { params: { page, limit } }).then(r => r.data),
 
   getOne: (id: string) =>
     client.get<Bottle>(`/api/bottles/${id}`).then(r => r.data),

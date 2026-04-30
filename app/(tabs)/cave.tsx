@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TextInput,
-  TouchableOpacity, RefreshControl, ScrollView,
+  TouchableOpacity, RefreshControl, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -23,7 +23,7 @@ const SORT_OPTIONS = [
 ] as const;
 
 export default function CaveScreen() {
-  const { bottles, isLoading, fetchBottles } = useBottleStore();
+  const { bottles, isLoading, isLoadingMore, hasNextPage, fetchBottles, loadMoreBottles } = useBottleStore();
   const { caveView, activeFilters, searchQuery, sortBy, setCaveView, setFilter, clearFilters, setSearchQuery, setSortBy } = useUIStore();
   const { caves, activeLieu } = useCavesStore();
   const [showFilters, setShowFilters] = useState(false);
@@ -194,6 +194,8 @@ export default function CaveScreen() {
         numColumns={caveView === 'grid' ? 2 : 1}
         key={caveView}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={fetchBottles} tintColor={Colors.lieDeVin} />}
+        onEndReached={() => { if (hasNextPage && !isLoadingMore) loadMoreBottles(); }}
+        onEndReachedThreshold={0.3}
         ListEmptyComponent={
           <EmptyState
             icon="wine-outline"
@@ -203,6 +205,7 @@ export default function CaveScreen() {
             onAction={searchQuery ? undefined : () => router.push('/(tabs)/add')}
           />
         }
+        ListFooterComponent={isLoadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.lieDeVin} /> : null}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
