@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, TextInput, Image, Modal, ActionSheetIOS, Platform,
@@ -11,11 +11,18 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../src/constants';
-import { useAuthStore, useBottleStore } from '../src/stores';
+import { useAuthStore } from '../src/stores';
+import { statsApi } from '../src/api';
 
 export default function ProfileScreen() {
   const { user, logout, updateMe, deleteMe, profilePhotoUri, setProfilePhoto, uploadProfilePhoto } = useAuthStore();
-  const { bottles } = useBottleStore();
+
+  const [profileStats, setProfileStats] = useState<{ totalBottles: number; favoritesCount: number; totalReferences: number } | null>(null);
+  useEffect(() => {
+    statsApi.getDashboard()
+      .then(d => setProfileStats({ totalBottles: d.totalBottles, favoritesCount: d.favoritesCount, totalReferences: d.totalReferences }))
+      .catch(() => {});
+  }, []);
 
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName]         = useState(user?.name ?? '');
@@ -111,7 +118,6 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const totalBottles = bottles.reduce((s, b) => s + b.quantite, 0);
   const memberSince  = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
     : '';
@@ -259,9 +265,9 @@ export default function ProfileScreen() {
 
         {/* Statistiques rapides */}
         <View style={s.statsRow}>
-          <StatPill value={totalBottles} label="bouteilles" icon="wine-outline" />
-          <StatPill value={bottles.filter(b => b.isFavorite).length} label="favoris" icon="heart-outline" color={Colors.rosePale} />
-          <StatPill value={bottles.length} label="références" icon="list-outline" color={Colors.ambreChaud} />
+          <StatPill value={profileStats?.totalBottles ?? null} label="bouteilles" icon="wine-outline" />
+          <StatPill value={profileStats?.favoritesCount ?? null} label="favoris" icon="heart-outline" color={Colors.rosePale} />
+          <StatPill value={profileStats?.totalReferences ?? null} label="références" icon="list-outline" color={Colors.ambreChaud} />
         </View>
 
         {/* Section Mon compte */}
@@ -456,12 +462,12 @@ export default function ProfileScreen() {
 
 // ── Subcomponents ──────────────────────────────────────────────────────────────
 
-const StatPill = ({ value, label, icon, color = Colors.lieDeVin }: { value: number; label: string; icon: any; color?: string }) => (
+const StatPill = ({ value, label, icon, color = Colors.lieDeVin }: { value: number | null; label: string; icon: any; color?: string }) => (
   <View style={[sp.pill, { borderColor: color + '30' }]}>
     <View style={[sp.iconBox, { backgroundColor: color + '15' }]}>
       <Ionicons name={icon} size={16} color={color} />
     </View>
-    <Text style={[sp.value, { color }]}>{value}</Text>
+    <Text style={[sp.value, { color }]}>{value ?? '—'}</Text>
     <Text style={sp.label}>{label}</Text>
   </View>
 );
