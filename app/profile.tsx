@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, TextInput, Image, Modal, ActionSheetIOS, Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -341,7 +342,9 @@ export default function ProfileScreen() {
 
       {/* Modal changement de mot de passe */}
       <Modal visible={showPwdModal} transparent animationType="fade">
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={del.backdrop}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
           <View style={del.box}>
             <Ionicons name="lock-closed-outline" size={32} color={Colors.lieDeVin} style={{ marginBottom: Spacing.sm }} />
             <Text style={del.title}>Changer le mot de passe</Text>
@@ -387,7 +390,9 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Modal suppression de compte */}
