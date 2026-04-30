@@ -41,17 +41,27 @@ const store = {
 
 async function apiFetch(path: string, options: RequestInit & { token?: string } = {}) {
   const { token, ...rest } = options;
-  const res = await fetch(API_URL + path, {
-    ...rest,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(rest.headers ?? {}),
-    },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message ?? 'Erreur réseau.');
-  return data;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(API_URL + path, {
+      ...rest,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(rest.headers ?? {}),
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message ?? 'Erreur réseau.');
+    return data;
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw new Error('La requête a expiré. Vérifiez votre connexion.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
