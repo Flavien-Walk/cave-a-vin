@@ -17,6 +17,7 @@ function getUserNote(bottle) {
 
 function normalizeStr(s) {
   return (s ?? '')
+    .replace(/œ/g, 'oe').replace(/æ/g, 'ae')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()

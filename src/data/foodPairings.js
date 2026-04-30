@@ -3,7 +3,9 @@
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function normalize(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  return s.toLowerCase()
+    .replace(/œ/g, 'oe').replace(/æ/g, 'ae')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
 // ── Détection du plat ─────────────────────────────────────────────────────────
@@ -61,7 +63,7 @@ const FOOD_PAIRINGS = [
   // ═══ VIANDES ROUGES ══════════════════════════════════════════════════════════
   {
     id: 'viande_rouge_grillee', label: 'Viande rouge grillée', group: 'Viandes & volailles', priority: 77,
-    keywords: ['entrecote','entrecôte','steak','bavette','onglet','hampe','rumsteck','faux-filet','faux filet','cote de boeuf','côte de bœuf','t-bone','ribeye','tartare','carpaccio boeuf','boeuf grille','bœuf grillé','grillade','grillades','barbecue viande','plancha boeuf','bifteck'],
+    keywords: ['entrecote','entrecôte','steak','bavette','onglet','hampe','rumsteck','faux-filet','faux filet','cote de boeuf','côte de bœuf','t-bone','ribeye','tartare','carpaccio boeuf','boeuf grille','bœuf grillé','grillade','grillades','barbecue viande','plancha boeuf','bifteck','boeuf','bœuf','viande rouge'],
     ideal:      { couleurs: ['rouge'], regionsPreferees: ['Bordeaux','Rhône','Languedoc'] },
     bon:        { couleurs: ['rosé'] },
     acceptable: { couleurs: [] },
@@ -226,7 +228,7 @@ const FOOD_PAIRINGS = [
   // ═══ POISSONS & FRUITS DE MER ═════════════════════════════════════════════════
   {
     id: 'poisson_blanc_grille', label: 'Poisson blanc grillé ou au four', group: 'Poissons & fruits de mer', priority: 76,
-    keywords: ['sole','bar','loup de mer','dorade','daurade','lieu','lieu jaune','cabillaud','morue','turbot','merlan','fletan','flétan','saint-pierre','sandre','perche','brochet','truite','poisson blanc','filet de poisson','poisson grille','poisson vapeur','poisson au four','poisson cuit'],
+    keywords: ['sole','bar','loup de mer','dorade','daurade','lieu','lieu jaune','cabillaud','morue','turbot','merlan','fletan','flétan','saint-pierre','sandre','perche','brochet','truite','poisson blanc','filet de poisson','poisson grille','poisson vapeur','poisson au four','poisson cuit','poisson'],
     ideal:      { couleurs: ['blanc'], regionsPreferees: ['Bourgogne','Loire','Alsace','Provence'] },
     bon:        { couleurs: ['effervescent','rosé'] },
     acceptable: { couleurs: [] },
@@ -704,7 +706,7 @@ const FOOD_PAIRINGS = [
   // ═══ DESSERTS ════════════════════════════════════════════════════════════════
   {
     id: 'dessert_chocolat_noir', label: 'Dessert au chocolat noir', group: 'Desserts', priority: 86,
-    keywords: ['fondant chocolat','fondant au chocolat','mousse au chocolat','brownies','brownie','ganache chocolat','tarte chocolat','gateau chocolat noir','chocolat amer','coulant chocolat','soufle chocolat','truffes chocolat'],
+    keywords: ['fondant chocolat','fondant au chocolat','mousse au chocolat','brownies','brownie','ganache chocolat','tarte chocolat','gateau chocolat noir','chocolat amer','coulant chocolat','soufle chocolat','truffes chocolat','dessert chocolat','gateau chocolat','chocolat noir'],
     ideal:      { couleurs: ['moelleux'], regionsPreferees: ['Banyuls','Maury','Rivesaltes'] },
     bon:        { couleurs: ['rouge'] },
     acceptable: { couleurs: ['effervescent'] },
