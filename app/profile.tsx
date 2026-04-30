@@ -25,6 +25,13 @@ export default function ProfileScreen() {
   const [deletePassword, setDeletePassword]   = useState('');
   const [deleting, setDeleting]               = useState(false);
 
+  // Changement de mot de passe
+  const [showPwdModal, setShowPwdModal]   = useState(false);
+  const [currentPwd, setCurrentPwd]       = useState('');
+  const [newPwd, setNewPwd]               = useState('');
+  const [confirmPwd, setConfirmPwd]       = useState('');
+  const [changingPwd, setChangingPwd]     = useState(false);
+
   // Photo de profil
   const [showCam, setShowCam]     = useState(false);
   const [capturing, setCapturing] = useState(false);
@@ -164,6 +171,27 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (newPwd.length < 6) {
+      Alert.alert('Erreur', 'Le nouveau mot de passe doit contenir au moins 6 caractères.');
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas.');
+      return;
+    }
+    setChangingPwd(true);
+    try {
+      await updateMe(undefined, newPwd, currentPwd);
+      setShowPwdModal(false);
+      Alert.alert('Succès', 'Mot de passe mis à jour.');
+    } catch (e: any) {
+      Alert.alert('Erreur', e.message);
+    } finally {
+      setChangingPwd(false);
+    }
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Header */}
@@ -248,18 +276,7 @@ export default function ProfileScreen() {
           <Row
             icon="lock-closed-outline"
             label="Changer le mot de passe"
-            onPress={() =>
-              Alert.prompt(
-                'Nouveau mot de passe',
-                'Minimum 6 caractères',
-                async (pwd) => {
-                  if (!pwd || pwd.length < 6) return;
-                  try { await updateMe(undefined, pwd); Alert.alert('Mot de passe mis à jour'); }
-                  catch (e: any) { Alert.alert('Erreur', e.message); }
-                },
-                'secure-text'
-              )
-            }
+            onPress={() => { setCurrentPwd(''); setNewPwd(''); setConfirmPwd(''); setShowPwdModal(true); }}
           />
         </View>
 
@@ -313,6 +330,57 @@ export default function ProfileScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Modal changement de mot de passe */}
+      <Modal visible={showPwdModal} transparent animationType="fade">
+        <View style={del.backdrop}>
+          <View style={del.box}>
+            <Ionicons name="lock-closed-outline" size={32} color={Colors.lieDeVin} style={{ marginBottom: Spacing.sm }} />
+            <Text style={del.title}>Changer le mot de passe</Text>
+            <Text style={del.sub}>Saisissez votre mot de passe actuel puis le nouveau.</Text>
+            <TextInput
+              style={[del.input, { marginBottom: Spacing.sm }]}
+              placeholder="Mot de passe actuel"
+              placeholderTextColor={Colors.brunClair}
+              secureTextEntry
+              value={currentPwd}
+              onChangeText={setCurrentPwd}
+              autoFocus
+            />
+            <TextInput
+              style={[del.input, { marginBottom: Spacing.sm }]}
+              placeholder="Nouveau mot de passe (min. 6 car.)"
+              placeholderTextColor={Colors.brunClair}
+              secureTextEntry
+              value={newPwd}
+              onChangeText={setNewPwd}
+            />
+            <TextInput
+              style={del.input}
+              placeholder="Confirmer le nouveau mot de passe"
+              placeholderTextColor={Colors.brunClair}
+              secureTextEntry
+              value={confirmPwd}
+              onChangeText={setConfirmPwd}
+            />
+            <View style={del.row}>
+              <TouchableOpacity style={del.cancelBtn} onPress={() => setShowPwdModal(false)} disabled={changingPwd}>
+                <Text style={del.cancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[del.confirmBtn, { backgroundColor: Colors.lieDeVin }]}
+                onPress={handleChangePassword}
+                disabled={changingPwd || !currentPwd || !newPwd || !confirmPwd}
+              >
+                {changingPwd
+                  ? <ActivityIndicator size="small" color={Colors.white} />
+                  : <Text style={del.confirmText}>Confirmer</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal suppression de compte */}
       <Modal visible={showDeleteModal} transparent animationType="fade">

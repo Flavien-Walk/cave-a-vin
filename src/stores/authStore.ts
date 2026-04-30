@@ -23,7 +23,7 @@ interface AuthState {
   register:         (name: string, email: string, password: string, code: string) => Promise<void>;
   logout:           () => Promise<void>;
   loadSession:      () => Promise<boolean>;
-  updateMe:         (name?: string, password?: string) => Promise<void>;
+  updateMe:         (name?: string, password?: string, currentPassword?: string) => Promise<void>;
   deleteMe:         (password: string) => Promise<void>;
   setProfilePhoto:  (uri: string | null) => Promise<void>;
   uploadProfilePhoto: (localUri: string) => Promise<void>;
@@ -157,12 +157,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: null, token: null, isLoading: false });
   },
 
-  updateMe: async (name, password) => {
+  updateMe: async (name, password, currentPassword) => {
     const { token } = get();
     const { user } = await apiFetch('/api/auth/me', {
       method: 'PUT',
       token: token!,
-      body: JSON.stringify({ name, password }),
+      body: JSON.stringify({ name, password, currentPassword }),
     });
     await store.set(USER_KEY, JSON.stringify(user));
     set({ user });
