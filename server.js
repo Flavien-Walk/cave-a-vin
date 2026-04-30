@@ -1,4 +1,8 @@
 require('dotenv').config();
+if (!process.env.MONGODB_URI) {
+  console.error('FATAL: MONGODB_URI manquant. Définissez cette variable avant de démarrer le serveur.');
+  process.exit(1);
+}
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
