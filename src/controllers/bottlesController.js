@@ -22,11 +22,54 @@ exports.uploadPhoto = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── GET /api/bottles/favorites ───────────────────────────────────────────────
+exports.getFavorites = async (req, res, next) => {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip  = (page - 1) * limit;
+
+    const query = { userId: req.userId, isFavorite: true, quantite: { $gt: 0 } };
+    const [items, total] = await Promise.all([
+      Bottle.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Bottle.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(total / limit) || 1;
+    res.json({
+      items,
+      pagination: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+    });
+  } catch (err) { next(err); }
+};
+
+// ── GET /api/bottles/urgent ───────────────────────────────────────────────────
+exports.getUrgent = async (req, res, next) => {
+  try {
+    const year  = new Date().getFullYear();
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip  = (page - 1) * limit;
+
+    const query = { userId: req.userId, quantite: { $gt: 0 }, consommerAvant: { $exists: true, $gt: 0, $lte: year + 1 } };
+    const [items, total] = await Promise.all([
+      Bottle.find(query).sort({ consommerAvant: 1, createdAt: -1 }).skip(skip).limit(limit),
+      Bottle.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(total / limit) || 1;
+    res.json({
+      items,
+      pagination: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+    });
+  } catch (err) { next(err); }
+};
+
 // ── GET /api/bottles ─────────────────────────────────────────────────────────
 exports.getAll = async (req, res, next) => {
   try {
     const page  = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 200));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
     const skip  = (page - 1) * limit;
 
     const [items, total] = await Promise.all([

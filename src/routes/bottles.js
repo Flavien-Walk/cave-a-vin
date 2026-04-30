@@ -28,6 +28,8 @@ const scanLimiter = rateLimit({
 // Toutes les routes bouteilles nécessitent l'auth
 router.use(authMiddleware);
 
+router.get('/favorites',             c.getFavorites);
+router.get('/urgent',                c.getUrgent);
 router.get('/recommend',             c.recommend);
 router.get('/taste-profile',         c.getTasteProfile);
 router.get('/smart-recommendations', c.getSmartRecommendations);

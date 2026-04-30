@@ -96,13 +96,19 @@ const BottleSchema = new mongoose.Schema({
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
 BottleSchema.index({ nom: 'text', producteur: 'text', region: 'text', appellation: 'text' });
-BottleSchema.index({ userId: 1, createdAt: -1 }); // pagination principale
-BottleSchema.index({ couleur: 1 });
-BottleSchema.index({ cave: 1, emplacement: 1 });
+// Pagination principale — GET /api/bottles
+BottleSchema.index({ userId: 1, createdAt: -1 });
+// Favoris — GET /api/bottles/favorites
+BottleSchema.index({ userId: 1, isFavorite: 1, createdAt: -1 });
+// Urgents — GET /api/bottles/urgent + agrégation stats
+BottleSchema.index({ userId: 1, consommerAvant: 1, quantite: 1 });
+// Valeur de cave — agrégation par cave
+BottleSchema.index({ userId: 1, cave: 1, createdAt: -1 });
+// Composition par couleur — agrégation stats/cave-value
+BottleSchema.index({ userId: 1, couleur: 1, createdAt: -1 });
+// Index simples conservés pour les requêtes ponctuelles
 BottleSchema.index({ annee: 1 });
-BottleSchema.index({ isFavorite: 1 });
-BottleSchema.index({ consommerAvant: 1 });
-BottleSchema.index({ createdAt: -1 });
+BottleSchema.index({ cave: 1, emplacement: 1 });
 
 // ── Virtuals ──────────────────────────────────────────────────────────────────
 BottleSchema.virtual('isUrgent').get(function () {

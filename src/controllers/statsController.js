@@ -1,6 +1,91 @@
 const Bottle = require('../models/Bottle');
 const ConsumptionHistory = require('../models/ConsumptionHistory');
 
+exports.getCaveValue = async (req, res, next) => {
+  try {
+    const uid = req.userId;
+
+    const [aggregate, byCave, byColor] = await Promise.all([
+      Bottle.aggregate([
+        { $match: { userId: uid, quantite: { $gt: 0 } } },
+        { $group: {
+            _id: null,
+            totalValue:   { $sum: { $multiply: ['$prixAchat', '$quantite'] } },
+            totalBottles: { $sum: '$quantite' },
+        }},
+      ]),
+      Bottle.aggregate([
+        { $match: { userId: uid, cave: { $exists: true, $ne: '' }, quantite: { $gt: 0 } } },
+        { $group: {
+            _id:          '$cave',
+            totalValue:   { $sum: { $multiply: ['$prixAchat', '$quantite'] } },
+            totalBottles: { $sum: '$quantite' },
+        }},
+        { $sort: { totalValue: -1 } },
+        { $project: { cave: '$_id', totalValue: { $round: ['$totalValue', 2] }, totalBottles: 1, _id: 0 } },
+      ]),
+      Bottle.aggregate([
+        { $match: { userId: uid, quantite: { $gt: 0 } } },
+        { $group: {
+            _id:          '$couleur',
+            totalValue:   { $sum: { $multiply: ['$prixAchat', '$quantite'] } },
+            totalBottles: { $sum: '$quantite' },
+        }},
+        { $sort: { totalValue: -1 } },
+        { $project: { couleur: '$_id', totalValue: { $round: ['$totalValue', 2] }, totalBottles: 1, _id: 0 } },
+      ]),
+    ]);
+
+    res.json({
+      totalValue:   Math.round((aggregate[0]?.totalValue   ?? 0) * 100) / 100,
+      totalBottles: aggregate[0]?.totalBottles ?? 0,
+      byCave,
+      byColor,
+    });
+  } catch (err) { next(err); }
+};
+
+exports.getDashboard = async (req, res, next) => {
+  try {
+    const uid  = req.userId;
+    const year = new Date().getFullYear();
+
+    const [aggregate, urgentPreview, favoritesPreview, recentBottles] = await Promise.all([
+      Bottle.aggregate([
+        { $match: { userId: uid } },
+        { $group: {
+            _id:             null,
+            totalBottles:    { $sum: '$quantite' },
+            totalReferences: { $sum: 1 },
+            totalValue:      { $sum: { $multiply: ['$prixAchat', '$quantite'] } },
+            favoritesCount:  { $sum: { $cond: ['$isFavorite', 1, 0] } },
+            urgentCount:     { $sum: { $cond: [
+              { $and: [{ $gt: ['$quantite', 0] }, { $lte: ['$consommerAvant', year + 1] }, { $gt: ['$consommerAvant', 0] }] },
+              1, 0,
+            ]}},
+        }},
+      ]),
+      Bottle.find({ userId: uid, quantite: { $gt: 0 }, consommerAvant: { $exists: true, $gt: 0, $lte: year + 1 } })
+        .sort({ consommerAvant: 1 }).limit(5).lean(),
+      Bottle.find({ userId: uid, isFavorite: true, quantite: { $gt: 0 } })
+        .sort({ createdAt: -1 }).limit(5).lean(),
+      Bottle.find({ userId: uid }).sort({ createdAt: -1 }).limit(5).lean(),
+    ]);
+
+    const agg = aggregate[0];
+    res.json({
+      totalBottles:    agg?.totalBottles    ?? 0,
+      totalReferences: agg?.totalReferences ?? 0,
+      totalValue:      Math.round((agg?.totalValue ?? 0) * 100) / 100,
+      favoritesCount:  agg?.favoritesCount  ?? 0,
+      urgentCount:     agg?.urgentCount     ?? 0,
+      urgentPreview,
+      favoritesPreview,
+      recentBottles,
+    });
+  } catch (err) { next(err); }
+};
+
 exports.getSummary = async (req, res, next) => {
   try {
     const year    = new Date().getFullYear();
