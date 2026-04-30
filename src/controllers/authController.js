@@ -101,12 +101,16 @@ exports.me = async (req, res) => {
 // PUT /api/auth/me  (update name/password)
 exports.updateMe = async (req, res, next) => {
   try {
-    const { name, password } = req.body;
+    const { name, password, currentPassword } = req.body;
     const user = await User.findById(req.userId);
-    if (name)     user.name = name;
+    if (name) user.name = name;
     if (password) {
+      if (!currentPassword)
+        return res.status(400).json({ message: 'Mot de passe actuel requis.' });
       if (password.length < 6)
         return res.status(400).json({ message: 'Mot de passe trop court (6 caractères min).' });
+      const ok = await user.checkPassword(currentPassword);
+      if (!ok) return res.status(401).json({ message: 'Mot de passe actuel incorrect.' });
       user.passwordHash = password;
     }
     await user.save();
