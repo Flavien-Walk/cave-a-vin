@@ -1,31 +1,69 @@
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../src/constants';
-import { useBottleStore } from '../src/stores';
+import { statsApi, bottlesApi } from '../src/api';
 import { BottleCard } from '../src/components/bottle/BottleCard';
 import { formatPrice } from '../src/utils/bottle.utils';
+import type { CaveValueData } from '../src/types';
+import type { Bottle } from '../src/types';
 
 export default function CaveValueScreen() {
-  const { bottles } = useBottleStore();
+  const [valueData, setValueData]   = useState<CaveValueData | null>(null);
+  const [bottles, setBottles]       = useState<Bottle[]>([]);
+  const [isLoading, setIsLoading]   = useState(false);
+  const [isLoadMore, setIsLoadMore] = useState(false);
+  const [page, setPage]             = useState(1);
+  const [hasNext, setHasNext]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
-  const { sorted, totalValue, avgPrice, pricedCount, pricedPct } = useMemo(() => {
-    const available  = bottles.filter(b => b.quantite > 0);
-    const withPrice  = available.filter(b => b.prixAchat && b.prixAchat > 0);
-    const sorted     = [...available].sort((a, b) => (b.prixAchat ?? 0) - (a.prixAchat ?? 0));
-    const totalValue = withPrice.reduce((s, b) => s + (b.prixAchat ?? 0) * b.quantite, 0);
-    const avgPrice   = withPrice.length ? withPrice.reduce((s, b) => s + (b.prixAchat ?? 0), 0) / withPrice.length : 0;
-    const pricedPct  = available.length ? Math.round((withPrice.length / available.length) * 100) : 0;
-    return { sorted, totalValue, avgPrice, pricedCount: withPrice.length, pricedPct };
-  }, [bottles]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [value, { items, pagination }] = await Promise.all([
+        statsApi.getCaveValue(),
+        bottlesApi.getAll(1, 50),
+      ]);
+      const sorted = [...items].sort((a, b) => (b.prixAchat ?? 0) - (a.prixAchat ?? 0));
+      setValueData(value);
+      setBottles(sorted);
+      setPage(1);
+      setHasNext(pagination.hasNextPage);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const lowDataWarning = pricedPct < 50 && sorted.length > 0;
+  const loadMore = useCallback(async () => {
+    if (isLoadMore || !hasNext) return;
+    setIsLoadMore(true);
+    try {
+      const nextPage = page + 1;
+      const { items, pagination } = await bottlesApi.getAll(nextPage, 50);
+      const sorted = [...items].sort((a, b) => (b.prixAchat ?? 0) - (a.prixAchat ?? 0));
+      setBottles(prev => [...prev, ...sorted]);
+      setPage(nextPage);
+      setHasNext(pagination.hasNextPage);
+    } catch { /* silencieux */ }
+    finally { setIsLoadMore(false); }
+  }, [isLoadMore, hasNext, page]);
+
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+
+  const totalValue   = valueData?.totalValue   ?? 0;
+  const totalBottles = valueData?.totalBottles ?? 0;
+  const pricedCount  = bottles.filter(b => b.prixAchat && b.prixAchat > 0).length;
+  const pricedPct    = bottles.length > 0 ? Math.round((pricedCount / bottles.length) * 100) : 0;
+  const avgPrice     = pricedCount > 0 ? bottles.filter(b => b.prixAchat && b.prixAchat > 0).reduce((s, b) => s + (b.prixAchat ?? 0), 0) / pricedCount : 0;
+  const lowDataWarning = pricedPct < 50 && bottles.length > 0;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={Colors.brunMoka} />
@@ -34,63 +72,76 @@ export default function CaveValueScreen() {
         <View style={{ width: 38 }} />
       </View>
 
+      {error && (
+        <TouchableOpacity style={s.errorBanner} onPress={fetchData} activeOpacity={0.8}>
+          <Ionicons name="wifi-outline" size={14} color={Colors.white} />
+          <Text style={s.errorText}>{error}</Text>
+          <Ionicons name="refresh-outline" size={14} color={Colors.white} />
+        </TouchableOpacity>
+      )}
+
       <FlatList
-        data={sorted}
+        data={bottles}
         keyExtractor={b => b._id}
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={fetchData} tintColor={Colors.lieDeVin} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
         ListHeaderComponent={
-          <>
-            {/* Card valeur principale */}
-            <View style={s.heroCard}>
-              <Text style={s.heroLabel}>VALEUR ESTIMÉE</Text>
-              <Text style={s.heroValue}>{formatPrice(totalValue)}</Text>
-              <Text style={s.heroSub}>
-                {pricedCount} bouteille{pricedCount !== 1 ? 's' : ''} avec prix renseigné
-              </Text>
-            </View>
+          isLoading ? (
+            <ActivityIndicator color={Colors.lieDeVin} style={{ marginVertical: Spacing.xxxl }} />
+          ) : (
+            <>
+              <View style={s.heroCard}>
+                <Text style={s.heroLabel}>VALEUR ESTIMÉE</Text>
+                <Text style={s.heroValue}>{formatPrice(totalValue)}</Text>
+                <Text style={s.heroSub}>{totalBottles} bouteille{totalBottles !== 1 ? 's' : ''} disponibles</Text>
+              </View>
 
-            {/* Stats row */}
-            <View style={s.statsRow}>
-              <View style={s.statCell}>
-                <Text style={s.statValue}>{formatPrice(avgPrice)}</Text>
-                <Text style={s.statLabel}>Prix moyen</Text>
+              <View style={s.statsRow}>
+                <View style={s.statCell}>
+                  <Text style={s.statValue}>{formatPrice(avgPrice)}</Text>
+                  <Text style={s.statLabel}>Prix moyen</Text>
+                </View>
+                <View style={s.statDivider} />
+                <View style={s.statCell}>
+                  <Text style={[s.statValue, pricedPct < 50 && { color: Colors.ambreChaud }]}>
+                    {pricedPct}%
+                  </Text>
+                  <Text style={s.statLabel}>Bouteilles pricées</Text>
+                </View>
+                <View style={s.statDivider} />
+                <View style={s.statCell}>
+                  <Text style={s.statValue}>{bottles.length}</Text>
+                  <Text style={s.statLabel}>Références</Text>
+                </View>
               </View>
-              <View style={s.statDivider} />
-              <View style={s.statCell}>
-                <Text style={[s.statValue, pricedPct < 50 && { color: Colors.ambreChaud }]}>
-                  {pricedPct}%
-                </Text>
-                <Text style={s.statLabel}>Bouteilles pricées</Text>
-              </View>
-              <View style={s.statDivider} />
-              <View style={s.statCell}>
-                <Text style={s.statValue}>{sorted.length}</Text>
-                <Text style={s.statLabel}>Références</Text>
-              </View>
-            </View>
 
-            {/* Avertissement données manquantes */}
-            {lowDataWarning && (
-              <View style={s.warning}>
-                <Ionicons name="information-circle-outline" size={15} color={Colors.ambreChaud} />
-                <Text style={s.warningText}>
-                  Seulement {pricedPct}% de vos bouteilles ont un prix renseigné. La valeur affichée est une estimation partielle.
-                </Text>
-              </View>
-            )}
+              {lowDataWarning && (
+                <View style={s.warning}>
+                  <Ionicons name="information-circle-outline" size={15} color={Colors.ambreChaud} />
+                  <Text style={s.warningText}>
+                    Seulement {pricedPct}% de vos bouteilles ont un prix renseigné. La valeur affichée est une estimation partielle.
+                  </Text>
+                </View>
+              )}
 
-            <Text style={s.listTitle}>Vos bouteilles par valeur</Text>
-          </>
+              <Text style={s.listTitle}>Vos bouteilles par valeur</Text>
+            </>
+          )
         }
         renderItem={({ item }) => (
           <BottleCard bottle={item} onPress={() => router.push(`/bottle/${item._id}` as any)} />
         )}
+        ListFooterComponent={isLoadMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.lieDeVin} /> : null}
         ListEmptyComponent={
-          <View style={s.empty}>
-            <Ionicons name="wine-outline" size={40} color={Colors.parchemin} />
-            <Text style={s.emptyText}>Aucune bouteille dans la cave</Text>
-          </View>
+          !isLoading ? (
+            <View style={s.empty}>
+              <Ionicons name="wine-outline" size={40} color={Colors.parchemin} />
+              <Text style={s.emptyText}>Aucune bouteille dans la cave</Text>
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>
@@ -110,6 +161,9 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.parchemin,
   },
   title: { ...Typography.h3, color: Colors.brunMoka },
+
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.rougeAlerte, paddingHorizontal: Spacing.lg, paddingVertical: 10 },
+  errorText:   { flex: 1, fontSize: 13, color: Colors.white, fontWeight: '600' },
 
   list: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
 

@@ -1,24 +1,47 @@
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Typography } from '../src/constants';
-import { useBottleStore } from '../src/stores';
+import { bottlesApi } from '../src/api';
 import { BottleCard } from '../src/components/bottle/BottleCard';
-import { isUrgent } from '../src/utils/bottle.utils';
+import type { Bottle } from '../src/types';
 
 type FilterType = 'favoritesOnly' | 'urgentOnly';
 
 export default function CaveFilteredScreen() {
   const { filter, title } = useLocalSearchParams<{ filter: FilterType; title?: string }>();
-  const { bottles } = useBottleStore();
 
-  const filtered = useMemo(() => {
-    if (filter === 'favoritesOnly') return bottles.filter(b => b.isFavorite && b.quantite > 0);
-    if (filter === 'urgentOnly')    return bottles.filter(b => isUrgent(b) && b.quantite > 0);
-    return [];
-  }, [bottles, filter]);
+  const [bottles, setBottles]       = useState<Bottle[]>([]);
+  const [isLoading, setIsLoading]   = useState(false);
+  const [isLoadMore, setIsLoadMore] = useState(false);
+  const [page, setPage]             = useState(1);
+  const [hasNext, setHasNext]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+
+  const fetchPage = useCallback(async (p: number, append = false) => {
+    if (p === 1) setIsLoading(true); else setIsLoadMore(true);
+    setError(null);
+    try {
+      const api = filter === 'favoritesOnly' ? bottlesApi.getFavorites : bottlesApi.getUrgent;
+      const { items, pagination } = await api(p, 50);
+      setBottles(prev => append ? [...prev, ...items] : items);
+      setPage(p);
+      setHasNext(pagination.hasNextPage);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+      setIsLoadMore(false);
+    }
+  }, [filter]);
+
+  useFocusEffect(useCallback(() => { fetchPage(1); }, [fetchPage]));
+
+  const loadMore = () => {
+    if (!isLoadMore && hasNext) fetchPage(page + 1, true);
+  };
 
   const screenTitle = title ?? (filter === 'favoritesOnly' ? 'Favoris' : filter === 'urgentOnly' ? 'À boire bientôt' : 'Cave');
 
@@ -30,35 +53,48 @@ export default function CaveFilteredScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={Colors.brunMoka} />
         </TouchableOpacity>
         <View style={s.titleBlock}>
           <Text style={s.title}>{screenTitle}</Text>
-          <Text style={s.count}>{filtered.length} bouteille{filtered.length !== 1 ? 's' : ''}</Text>
+          {!isLoading && <Text style={s.count}>{bottles.length} bouteille{bottles.length !== 1 ? 's' : ''}</Text>}
         </View>
         <View style={{ width: 38 }} />
       </View>
 
+      {error && (
+        <TouchableOpacity style={s.errorBanner} onPress={() => fetchPage(1)} activeOpacity={0.8}>
+          <Ionicons name="wifi-outline" size={14} color={Colors.white} />
+          <Text style={s.errorText}>{error}</Text>
+          <Ionicons name="refresh-outline" size={14} color={Colors.white} />
+        </TouchableOpacity>
+      )}
+
       <FlatList
-        data={filtered}
+        data={bottles}
         keyExtractor={b => b._id}
-        contentContainerStyle={[s.list, filtered.length === 0 && { flex: 1 }]}
+        contentContainerStyle={[s.list, bottles.length === 0 && { flex: 1 }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => fetchPage(1)} tintColor={Colors.lieDeVin} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
         renderItem={({ item }) => (
           <BottleCard bottle={item} onPress={() => router.push(`/bottle/${item._id}` as any)} />
         )}
+        ListFooterComponent={isLoadMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.lieDeVin} /> : null}
         ListEmptyComponent={
-          <View style={s.empty}>
-            <Ionicons
-              name={filter === 'favoritesOnly' ? 'heart-outline' : 'time-outline'}
-              size={40}
-              color={Colors.parchemin}
-            />
-            <Text style={s.emptyText}>{emptyText}</Text>
-          </View>
+          !isLoading ? (
+            <View style={s.empty}>
+              <Ionicons
+                name={filter === 'favoritesOnly' ? 'heart-outline' : 'time-outline'}
+                size={40}
+                color={Colors.parchemin}
+              />
+              <Text style={s.emptyText}>{emptyText}</Text>
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>
@@ -80,6 +116,9 @@ const s = StyleSheet.create({
   titleBlock: { alignItems: 'center' },
   title:      { ...Typography.h3, color: Colors.brunMoka },
   count:      { ...Typography.caption, color: Colors.brunClair, marginTop: 1 },
+
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.rougeAlerte, paddingHorizontal: Spacing.lg, paddingVertical: 10 },
+  errorText:   { flex: 1, fontSize: 13, color: Colors.white, fontWeight: '600' },
 
   list:      { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
   empty:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, paddingHorizontal: Spacing.xl },

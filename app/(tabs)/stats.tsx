@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow, Typography } from '../../src/constants';
 import { useBottleStore } from '../../src/stores';
-import { getWineColorHex, formatPrice, isUrgent } from '../../src/utils/bottle.utils';
+import { bottlesApi } from '../../src/api';
+import { getWineColorHex, formatPrice } from '../../src/utils/bottle.utils';
 import { router, useFocusEffect } from 'expo-router';
 import type { CaveStats, Bottle } from '../../src/types';
 
@@ -236,17 +237,33 @@ function computeGoûts(bottles: Bottle[]): TasteItem[] {
 
 export default function StatsScreen() {
   const { stats, bottles, isStatsLoading, fetchStats } = useBottleStore();
-  useEffect(() => { fetchStats(); }, []);
-  useFocusEffect(useCallback(() => { fetchStats(); }, []));
+  const [urgentBottles, setUrgentBottles] = useState<Bottle[]>([]);
+  const [lowStockBottles, setLowStockBottles] = useState<Bottle[]>([]);
+
+  const loadUrgentAndStats = useCallback(async () => {
+    fetchStats();
+    try {
+      const { items } = await bottlesApi.getUrgent(1, 50);
+      setUrgentBottles(items);
+    } catch { /* silencieux */ }
+  }, [fetchStats]);
+
+  useEffect(() => { loadUrgentAndStats(); }, []);
+  useFocusEffect(useCallback(() => { loadUrgentAndStats(); }, [loadUrgentAndStats]));
+
+  // lowStock: dernière bouteille d'une référence, non urgente
+  // Reste sur bottles local — indicateur secondaire, limite acceptable
+  const lowStock = useMemo(
+    () => bottles.filter(b => b.quantite === 1 && !(b.consommerAvant && b.consommerAvant <= new Date().getFullYear() + 1)),
+    [bottles]
+  );
+  useEffect(() => { setLowStockBottles(lowStock); }, [lowStock]);
 
   const insights        = useMemo(() => stats && bottles.length > 0 ? computeInsights(stats, bottles)       : [], [stats, bottles]);
   const equilibre       = useMemo(() => stats ? computeEquilibre(stats)                                      : [], [stats]);
   const profil          = useMemo(() => stats ? computeProfil(stats, bottles)                                : [], [stats, bottles]);
   const recommandations = useMemo(() => stats ? computeRecommandations(stats, bottles)                       : [], [stats, bottles]);
   const goûts           = useMemo(() => computeGoûts(bottles), [bottles]);
-
-  const urgentList = useMemo(() => bottles.filter(b => isUrgent(b) && b.quantite > 0), [bottles]);
-  const lowStock   = useMemo(() => bottles.filter(b => b.quantite === 1 && !isUrgent(b)), [bottles]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -397,9 +414,9 @@ export default function StatsScreen() {
             )}
 
             {/* ── À surveiller ── */}
-            {(urgentList.length > 0 || lowStock.length > 0) && (
+            {(urgentBottles.length > 0 || lowStockBottles.length > 0) && (
               <SectionCard icon="eye-outline" label="À surveiller" color={Colors.rougeAlerte}>
-                {urgentList.length > 0 && (
+                {urgentBottles.length > 0 && (
                   <TouchableOpacity
                     style={s.surveillerRow}
                     onPress={() => router.push({ pathname: '/cave-filtered', params: { filter: 'urgentOnly', title: 'À boire bientôt' } } as any)}
@@ -408,19 +425,19 @@ export default function StatsScreen() {
                     <View style={[s.surveillerDot, { backgroundColor: Colors.rougeAlerte }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={[s.surveillerLabel, { color: Colors.rougeAlerte }]}>
-                        {urgentList.length} bouteille{urgentList.length > 1 ? 's' : ''} à ouvrir rapidement
+                        {urgentBottles.length} bouteille{urgentBottles.length > 1 ? 's' : ''} à ouvrir rapidement
                       </Text>
                       <Text style={s.surveillerSub}>Dépassent ou approchent leur date optimale</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={14} color={Colors.rougeAlerte} />
                   </TouchableOpacity>
                 )}
-                {lowStock.length > 0 && (
-                  <View style={[s.surveillerRow, { borderTopWidth: urgentList.length > 0 ? 1 : 0, borderTopColor: Colors.parchemin, paddingTop: urgentList.length > 0 ? Spacing.md : 0 }]}>
+                {lowStockBottles.length > 0 && (
+                  <View style={[s.surveillerRow, { borderTopWidth: urgentBottles.length > 0 ? 1 : 0, borderTopColor: Colors.parchemin, paddingTop: urgentBottles.length > 0 ? Spacing.md : 0 }]}>
                     <View style={[s.surveillerDot, { backgroundColor: Colors.ambreChaud }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={[s.surveillerLabel, { color: Colors.ambreChaud }]}>
-                        {lowStock.length} référence{lowStock.length > 1 ? 's' : ''} en dernière bouteille
+                        {lowStockBottles.length} référence{lowStockBottles.length > 1 ? 's' : ''} en dernière bouteille
                       </Text>
                       <Text style={s.surveillerSub}>Réapprovisionnez avant d'être à sec</Text>
                     </View>

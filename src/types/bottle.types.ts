@@ -115,3 +115,21 @@ export interface CaveStats {
     total: number;
   };
 }
+
+export interface CaveValueData {
+  totalValue: number;
+  totalBottles: number;
+  byCave: { cave: string; totalValue: number; totalBottles: number }[];
+  byColor: { couleur: string; totalValue: number; totalBottles: number }[];
+}
+
+export interface DashboardData {
+  totalBottles: number;
+  totalReferences: number;
+  totalValue: number;
+  favoritesCount: number;
+  urgentCount: number;
+  urgentPreview: Bottle[];
+  favoritesPreview: Bottle[];
+  recentBottles: Bottle[];
+}

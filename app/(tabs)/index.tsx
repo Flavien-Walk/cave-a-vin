@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../src/constants';
 import { useBottleStore, useAuthStore, useCavesStore, useUIStore, useWishlistStore } from '../../src/stores';
 import { BottleCard } from '../../src/components/bottle/BottleCard';
-import { formatPrice, isUrgent } from '../../src/utils/bottle.utils';
+import { formatPrice } from '../../src/utils/bottle.utils';
 
 const ANECDOTES = [
   { emoji: '🍷', text: 'Un vin ouvert se conserve 3 à 5 jours au réfrigérateur, bouché hermétiquement.' },
@@ -74,7 +74,8 @@ export default function DashboardScreen() {
     return merged;
   }, [bottlesInLieu]);
 
-  const urgentList = useMemo(() => bottlesInLieu.filter(b => isUrgent(b) && b.quantite > 0), [bottlesInLieu]);
+  // Compte backend précis — scopé à tous les urgents, indépendant de la pagination locale
+  const urgentCount = stats?.urgent ?? 0;
 
   const firstName = user?.name?.split(' ')[0] ?? 'vous';
 
@@ -168,11 +169,11 @@ export default function DashboardScreen() {
         )}
 
         {/* ── Alerte urgence ── */}
-        {urgentList.length > 0 && (
-          <TouchableOpacity style={s.alert} onPress={() => router.push('/(tabs)/discover')} activeOpacity={0.8}>
+        {urgentCount > 0 && (
+          <TouchableOpacity style={s.alert} onPress={() => router.push({ pathname: '/cave-filtered', params: { filter: 'urgentOnly', title: 'À boire bientôt' } } as any)} activeOpacity={0.8}>
             <View style={s.alertDot} />
             <Text style={s.alertText}>
-              {urgentList.length} bouteille{urgentList.length > 1 ? 's' : ''} à consommer bientôt
+              {urgentCount} bouteille{urgentCount > 1 ? 's' : ''} à consommer bientôt
             </Text>
             <Ionicons name="chevron-forward" size={14} color={Colors.rougeAlerte} />
           </TouchableOpacity>
