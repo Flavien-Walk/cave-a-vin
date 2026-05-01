@@ -7,6 +7,10 @@ import { Colors, Spacing, Radius, Typography } from '../src/constants';
 
 const SECTIONS = [
   {
+    title: 'Notre philosophie',
+    body: `CAVOU a été pensée avec passion pour vous aider à organiser et profiter de votre cave simplement. Elle est gratuite, utile, et conçue dans le respect de votre vie privée.\n\nAucun tracking publicitaire. Aucune revente de données. Uniquement ce qui est strictement nécessaire au bon fonctionnement du service.`,
+  },
+  {
     title: 'Données collectées',
     body: `CAVOU collecte uniquement les données que vous saisissez volontairement :\n\n• Nom et adresse e-mail (création de compte)\n• Informations sur vos bouteilles (nom, millésime, région, note, prix, etc.)\n• Photos de bouteilles et de profil (stockées localement sur votre appareil)\n• Données de dégustation (notes, occasions, historique de consommation)`,
   },
@@ -20,11 +24,11 @@ const SECTIONS = [
   },
   {
     title: 'Photos',
-    body: `Les photos de bouteilles et de profil sont stockées localement sur votre appareil. Elles ne sont pas transmises à des serveurs tiers (hors fonctionnalité de reconnaissance d'étiquette, qui envoie l'image à l'API Anthropic Claude pour analyse ponctuelle).`,
+    body: `Les photos de bouteilles et de profil sont stockées localement sur votre appareil. Elles ne sont pas transmises à des serveurs tiers — sauf lors du scan d'étiquette, qui envoie l'image à l'API Anthropic Claude pour analyse ponctuelle uniquement.`,
   },
   {
     title: 'Vos droits (RGPD)',
-    body: `Conformément au Règlement Général sur la Protection des Données :\n\n• Droit d'accès : vous pouvez consulter toutes vos données depuis l'application\n• Droit de rectification : modifiez vos données à tout moment\n• Droit à l'effacement : supprimez définitivement votre compte et toutes vos données depuis Profil → Supprimer mon compte\n• Droit à la portabilité : contactez-nous pour un export\n\nPour exercer vos droits : cavevin76@gmail.com`,
+    body: `Conformément au Règlement Général sur la Protection des Données :\n\n• Droit d'accès : consultez toutes vos données depuis l'application\n• Droit de rectification : modifiez vos données à tout moment\n• Droit à l'effacement : supprimez votre compte depuis Profil → Supprimer mon compte\n• Droit à la portabilité : contactez-nous pour un export\n\nPour exercer vos droits : cavevin76@gmail.com`,
   },
   {
     title: 'Cookies et traceurs',
@@ -32,7 +36,7 @@ const SECTIONS = [
   },
   {
     title: 'Contact',
-    body: `Responsable du traitement : Flavien Léo\nContact : cavevin76@gmail.com\n\nPour toute question relative à la protection de vos données personnelles, écrivez-nous à cette adresse.`,
+    body: `Pour toute question sur la protection de vos données personnelles :\n\ncavevin76@gmail.com\n\nL'équipe CAVOU`,
   },
 ];
 
@@ -49,8 +53,9 @@ export default function PrivacyScreen() {
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <Text style={s.intro}>
-          CAVOU respecte votre vie privée. Cette page explique quelles données nous collectons,
-          pourquoi, et comment vous pouvez les contrôler.
+          CAVOU a été conçue pour vous aider à organiser et profiter de votre cave simplement.
+          Cette page vous explique honnêtement quelles données nous utilisons, pourquoi elles
+          sont nécessaires, et comment vous pouvez les contrôler.
         </Text>
 
         <Text style={s.updated}>Dernière mise à jour : avril 2026</Text>

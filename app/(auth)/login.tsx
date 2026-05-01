@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView, Platform,
-  TouchableOpacity, ScrollView, Alert, ActivityIndicator,
+  TouchableOpacity, ScrollView, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -40,10 +40,11 @@ export default function LoginScreen() {
 
           {/* Logo */}
           <View style={s.logoArea}>
-            <View style={s.logoRing}>
-              <Text style={s.logoIcon}>🍷</Text>
-            </View>
-            <Text style={s.appName}>Cave à Vin</Text>
+            <Image
+              source={require('../../assets/images/logo-accueil.png')}
+              style={s.logo}
+              resizeMode="contain"
+            />
             <Text style={s.tagline}>Votre cave, vos règles.</Text>
           </View>
 
@@ -110,16 +111,8 @@ const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.cremeIvoire },
   scroll: { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.xxxl },
 
-  logoArea: { alignItems: 'center', marginBottom: Spacing.xxxl, gap: Spacing.sm },
-  logoRing: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: Colors.champagne,
-    borderWidth: 1, borderColor: Colors.parchemin,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  logoIcon: { fontSize: 36 },
-  appName:  { fontSize: 28, fontWeight: '800', color: Colors.brunMoka, letterSpacing: -0.5 },
+  logoArea: { alignItems: 'center', marginBottom: Spacing.xxxl, gap: Spacing.md },
+  logo:     { width: 220, height: 120 },
   tagline:  { ...Typography.body, color: Colors.brunMoyen },
 
   form:      { gap: Spacing.md },

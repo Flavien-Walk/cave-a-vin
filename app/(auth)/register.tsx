@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView, Platform,
-  TouchableOpacity, ScrollView, Alert, ActivityIndicator,
+  TouchableOpacity, ScrollView, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -90,9 +90,17 @@ export default function RegisterScreen() {
           </View>
 
           <View style={s.logoArea}>
-            <View style={s.logoRing}>
-              <Text style={s.logoIcon}>{step === 0 ? '🍷' : '✉️'}</Text>
-            </View>
+            {step === 0 ? (
+              <Image
+                source={require('../../assets/images/logo-accueil.png')}
+                style={s.logo}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={s.verifyIcon}>
+                <Ionicons name="mail-outline" size={32} color={Colors.lieDeVin} />
+              </View>
+            )}
             <Text style={s.appName}>{step === 0 ? 'Créer un compte' : 'Vérification'}</Text>
             <Text style={s.tagline}>
               {step === 0
@@ -204,12 +212,12 @@ const s = StyleSheet.create({
   backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin, alignItems: 'center', justifyContent: 'center' },
 
   logoArea: { alignItems: 'center', marginBottom: Spacing.xl, gap: Spacing.sm },
-  logoRing: {
+  logo:     { width: 200, height: 110 },
+  verifyIcon: {
     width: 72, height: 72, borderRadius: 36,
     backgroundColor: Colors.champagne, borderWidth: 1, borderColor: Colors.parchemin,
     alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xs,
   },
-  logoIcon: { fontSize: 32 },
   appName:  { fontSize: 24, fontWeight: '800', color: Colors.brunMoka, letterSpacing: -0.5 },
   tagline:  { ...Typography.body, color: Colors.brunMoyen, textAlign: 'center' },
 
